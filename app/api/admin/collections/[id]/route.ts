@@ -3,6 +3,8 @@ import path from "path";
 import { NextRequest, NextResponse } from "next/server";
 
 import { requireAdmin } from "@/lib/admin";
+import { Op, type Transaction } from "sequelize";
+
 import { Collection, sequelize } from "@/lib/models";
 import {
   deleteFromSupabaseStorageByUrl,
@@ -22,12 +24,21 @@ function extensionFromType(type: string) {
   return "";
 }
 
-async function saveImageFile(file: File) {
+function slugify(value: string) {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)+/g, "");
+}
+
+async function saveImageFile(file: File, baseName: string) {
   const arrayBuffer = await file.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
   const originalExt = path.extname(file.name || "").toLowerCase();
   const ext = originalExt || extensionFromType(file.type) || ".bin";
-  const filename = `${Date.now()}-${Math.random().toString(16).slice(2)}${ext}`;
+  const safeBase = slugify(baseName) || "collection";
+  const filename = `${safeBase}-1-${Date.now()}-${Math.random().toString(16).slice(2, 6)}${ext}`;
   const objectPath = `${MEDIA_FOLDER}/${filename}`;
 
   return uploadToSupabaseStorage(
@@ -35,6 +46,33 @@ async function saveImageFile(file: File) {
     buffer,
     file.type || undefined,
   );
+}
+
+async function ensureUniqueSlug(
+  baseSlug: string,
+  collectionId: number,
+  transaction?: Transaction,
+) {
+  let slug = baseSlug;
+  let tries = 0;
+
+  while (
+    (await Collection.count({
+      where: {
+        slug,
+        id: { [Op.ne]: collectionId },
+      },
+      transaction,
+    })) > 0
+  ) {
+    tries += 1;
+    slug = `${baseSlug}-${Date.now()}-${tries}`;
+    if (tries > 5) {
+      slug = `${baseSlug}-${Math.random().toString(16).slice(2, 6)}`;
+    }
+  }
+
+  return slug;
 }
 
 export async function PUT(
@@ -65,12 +103,27 @@ export async function PUT(
 
   const formData = await request.formData();
   const title = formData.get("title")?.toString().trim() ?? "";
+  const slugInput = formData.get("slug")?.toString().trim() ?? "";
   const description = formData.get("description")?.toString().trim() ?? "";
   const removeImage = formData.get("remove_image")?.toString() === "1";
 
   if (!title) {
     return NextResponse.json(
       { error: "Collection name is required." },
+      { status: 400 },
+    );
+  }
+  if (!slugInput) {
+    return NextResponse.json(
+      { error: "Collection slug is required." },
+      { status: 400 },
+    );
+  }
+
+  const baseSlug = slugify(slugInput);
+  if (!baseSlug) {
+    return NextResponse.json(
+      { error: "Invalid collection slug." },
       { status: 400 },
     );
   }
@@ -89,14 +142,27 @@ export async function PUT(
   let shouldDeletePrevious = false;
   try {
     const updated = await sequelize.transaction(async (transaction) => {
-      const payload: { title: string; description: string | null; image_url?: string | null } =
-        {
-          title,
-          description: description || null,
-        };
+      const payload: {
+        title: string;
+        description: string | null;
+        slug?: string;
+        image_url?: string | null;
+      } = {
+        title,
+        description: description || null,
+      };
+
+      const uniqueSlug = await ensureUniqueSlug(
+        baseSlug,
+        collectionId,
+        transaction,
+      );
+      if (uniqueSlug !== collection.slug) {
+        payload.slug = uniqueSlug;
+      }
 
       if (imageFile && imageFile instanceof File) {
-        payload.image_url = await saveImageFile(imageFile);
+        payload.image_url = await saveImageFile(imageFile, title);
         shouldDeletePrevious = Boolean(previousImageUrl);
       } else if (removeImage) {
         payload.image_url = null;

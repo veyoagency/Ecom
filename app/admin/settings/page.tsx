@@ -54,6 +54,8 @@ export default async function AdminSettingsPage() {
         websiteTitle: settings?.website_title ?? "",
         websiteDescription: settings?.website_description ?? "",
         defaultCurrency: settings?.default_currency ?? "EUR",
+        logoUrl: settings?.logo_url ?? "",
+        logoTransparentUrl: settings?.logo_transparent_url ?? "",
         brevoApiKey: settings?.brevo_api_key ?? "",
       }}
     />

@@ -34,6 +34,7 @@ type CollectionEditorProps = {
   collection: {
     id: number;
     title: string;
+    slug: string;
     descriptionHtml: string;
     imageUrl: string | null;
   };
@@ -65,6 +66,7 @@ export default function CollectionEditorClient({
 }: CollectionEditorProps) {
   const router = useRouter();
   const [title, setTitle] = useState(collection.title);
+  const [slug, setSlug] = useState(collection.slug);
   const [descriptionHtml, setDescriptionHtml] = useState(
     collection.descriptionHtml ?? "",
   );
@@ -108,12 +110,15 @@ export default function CollectionEditorClient({
     onDrop,
   });
 
-  const isValid = useMemo(() => Boolean(title.trim()), [title]);
+  const isValid = useMemo(
+    () => Boolean(title.trim()) && Boolean(slug.trim()),
+    [title, slug],
+  );
 
   async function handleSubmit() {
     if (loading) return;
     if (!isValid) {
-      setError("Collection name is required.");
+      setError("Collection name and slug are required.");
       return;
     }
 
@@ -123,6 +128,7 @@ export default function CollectionEditorClient({
     try {
       const formData = new FormData();
       formData.append("title", title.trim());
+      formData.append("slug", slug.trim());
       formData.append("description", descriptionHtml.trim());
       if (imageFile) {
         formData.append("image", imageFile);
@@ -155,9 +161,26 @@ export default function CollectionEditorClient({
       title="Edit collection"
       current="collections"
       action={
-        <Button size="sm" onClick={handleSubmit} disabled={!isValid || loading}>
-          {loading ? "Saving..." : "Save changes"}
-        </Button>
+        <div className="flex items-center gap-2">
+          {slug.trim() ? (
+            <Button asChild variant="outline" size="sm">
+              <a
+                href={`/collections/${slug.trim()}`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                View
+              </a>
+            </Button>
+          ) : (
+            <Button variant="outline" size="sm" disabled>
+              View
+            </Button>
+          )}
+          <Button size="sm" onClick={handleSubmit} disabled={!isValid || loading}>
+            {loading ? "Saving..." : "Save changes"}
+          </Button>
+        </div>
       }
     >
       <div className="admin-product-grid">
@@ -241,6 +264,24 @@ export default function CollectionEditorClient({
         </div>
 
         <div className="flex flex-col gap-6">
+          <Card className="border-neutral-200 bg-white shadow-sm">
+            <CardHeader>
+              <CardTitle>Slug</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Field>
+                <FieldLabel htmlFor="collection-slug">Slug</FieldLabel>
+                <Input
+                  id="collection-slug"
+                  name="slug"
+                  placeholder="collection-slug"
+                  value={slug}
+                  onChange={(event) => setSlug(event.target.value)}
+                  required
+                />
+              </Field>
+            </CardContent>
+          </Card>
           <Card className="border-neutral-200 bg-white shadow-sm">
             <CardHeader>
               <CardTitle>Products in this collection</CardTitle>

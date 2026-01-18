@@ -214,6 +214,8 @@ export class WebsiteSetting extends Model {
   declare website_title: string | null;
   declare website_description: string | null;
   declare default_currency: string;
+  declare logo_url: string | null;
+  declare logo_transparent_url: string | null;
   declare brevo_api_key: string | null;
   declare created_at: Date;
   declare updated_at: Date;
@@ -247,6 +249,14 @@ WebsiteSetting.init(
       type: DataTypes.TEXT,
       allowNull: false,
       defaultValue: "EUR",
+    },
+    logo_url: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    logo_transparent_url: {
+      type: DataTypes.TEXT,
+      allowNull: true,
     },
     brevo_api_key: {
       type: DataTypes.TEXT,

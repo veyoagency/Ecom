@@ -16,9 +16,13 @@ import {
 export default function StoreHeader({
   transparent = false,
   fontClassName = "",
+  logoUrl = null,
+  storeName = "New Commerce",
 }: {
   transparent?: boolean;
   fontClassName?: string;
+  logoUrl?: string | null;
+  storeName?: string;
 }) {
   const iconClassName = transparent ? "text-white" : "text-neutral-900";
   const sheetClassName = `${fontClassName} bg-white`.trim();
@@ -36,7 +40,12 @@ export default function StoreHeader({
           <div className="flex h-full items-center justify-start">
             <Sheet>
               <SheetTrigger asChild>
-                <Button variant="ghost" size="icon" aria-label="Open menu">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Open menu"
+                  className="cursor-pointer hover:bg-transparent"
+                >
                   <Menu className={`h-5 w-5 ${iconClassName}`} />
                 </Button>
               </SheetTrigger>
@@ -77,13 +86,26 @@ export default function StoreHeader({
                 transparent ? "text-white" : "text-neutral-900"
               }`}
             >
-              New Commerce
+              {logoUrl ? (
+                <img
+                  src={logoUrl}
+                  alt={storeName}
+                  className="h-10 w-auto object-contain"
+                />
+              ) : (
+                storeName
+              )}
             </Link>
           </div>
           <div className="flex h-full items-center justify-end">
             <Sheet>
               <SheetTrigger asChild>
-                <Button variant="ghost" size="icon" aria-label="Open cart">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Open cart"
+                  className="cursor-pointer hover:bg-transparent"
+                >
                   <ShoppingBag className={`h-5 w-5 ${iconClassName}`} />
                 </Button>
               </SheetTrigger>

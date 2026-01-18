@@ -1,10 +1,12 @@
 import path from "path";
 
 import { NextRequest, NextResponse } from "next/server";
+import { Sequelize } from "sequelize";
 
 import { requireAdmin } from "@/lib/admin";
 import {
   Collection,
+  Op,
   Product,
   ProductCollection,
   ProductImage,
@@ -33,12 +35,21 @@ function extensionFromType(type: string) {
   return "";
 }
 
-async function saveMediaFile(file: File) {
+function slugify(value: string) {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)+/g, "");
+}
+
+async function saveMediaFile(file: File, baseName: string, position: number) {
   const arrayBuffer = await file.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
   const originalExt = path.extname(file.name || "").toLowerCase();
   const ext = originalExt || extensionFromType(file.type) || ".bin";
-  const filename = `${Date.now()}-${Math.random().toString(16).slice(2)}${ext}`;
+  const safeBase = slugify(baseName) || "product";
+  const filename = `${safeBase}-${position + 1}-${Date.now()}-${Math.random().toString(16).slice(2, 6)}${ext}`;
   const objectPath = `${MEDIA_FOLDER}/${filename}`;
 
   return uploadToSupabaseStorage(
@@ -75,6 +86,36 @@ function parseMediaOrder(raw: string | null) {
   return parsed.map((entry) => entry?.toString().trim() ?? "");
 }
 
+async function getUnusedUrls(urls: string[]) {
+  const unique = Array.from(new Set(urls.filter(Boolean)));
+  if (unique.length === 0) return [];
+
+  const rows = await ProductImage.findAll({
+    attributes: [
+      "url",
+      [Sequelize.fn("COUNT", Sequelize.col("id")), "count"],
+    ],
+    where: {
+      url: {
+        [Op.in]: unique,
+      },
+    },
+    group: ["url"],
+  });
+
+  const usage = new Map<string, number>();
+  rows.forEach((row) => {
+    const data = row.toJSON() as Record<string, unknown>;
+    const url = data.url?.toString() ?? "";
+    const count = Number(data.count ?? 0);
+    if (url) {
+      usage.set(url, count);
+    }
+  });
+
+  return unique.filter((url) => (usage.get(url) ?? 0) === 0);
+}
+
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -101,6 +142,7 @@ export async function PUT(
   const priceRaw = formData.get("price")?.toString().trim() ?? "";
   const compareAtRaw = formData.get("compare_at")?.toString().trim() ?? "";
   const status = formData.get("status")?.toString() ?? "active";
+  const slugRaw = formData.get("slug")?.toString().trim() ?? "";
   const variantsRaw = formData.get("variants")?.toString() ?? "";
   const mediaOrderRaw = formData.get("media_order")?.toString() ?? "";
 
@@ -134,6 +176,28 @@ export async function PUT(
     .getAll("collections")
     .map((value) => Number(value))
     .filter((value) => Number.isFinite(value));
+
+  let nextSlug = product.slug;
+  if (slugRaw) {
+    const candidate = slugify(slugRaw);
+    if (!candidate) {
+      return NextResponse.json({ error: "Invalid slug." }, { status: 400 });
+    }
+    if (candidate !== product.slug) {
+      const existing = await Product.count({
+        where: { slug: candidate, id: { [Op.ne]: product.id } },
+      });
+      if (existing > 0) {
+        return NextResponse.json(
+          { error: "Slug already in use." },
+          { status: 400 },
+        );
+      }
+    }
+    nextSlug = candidate;
+  } else {
+    return NextResponse.json({ error: "Slug is required." }, { status: 400 });
+  }
 
   let variantOptions: Array<{ name: string; values: string[] }> = [];
   try {
@@ -196,6 +260,7 @@ export async function PUT(
       await product.update(
         {
           title,
+          slug: nextSlug,
           description_html: description,
           price_cents: priceCents,
           compare_at_cents: compareAtCents,
@@ -311,7 +376,7 @@ export async function PUT(
             if (!file) {
               throw new Error("Invalid media order.");
             }
-            const url = await saveMediaFile(file);
+            const url = await saveMediaFile(file, title, mediaRecords.length);
             mediaRecords.push({
               product_id: product.id,
               url,
@@ -321,7 +386,7 @@ export async function PUT(
         }
       } else {
         for (const [index, file] of mediaEntries.entries()) {
-          const url = await saveMediaFile(file);
+          const url = await saveMediaFile(file, title, index);
           mediaRecords.push({
             product_id: product.id,
             url,
@@ -338,8 +403,9 @@ export async function PUT(
     });
 
     if (removedImageUrls.length > 0) {
+      const unused = await getUnusedUrls(removedImageUrls);
       await Promise.all(
-        removedImageUrls.map((url) =>
+        unused.map((url) =>
           deleteFromSupabaseStorageByUrl(url).catch(() => undefined),
         ),
       );
@@ -418,8 +484,9 @@ export async function DELETE(
     });
 
     if (existingUrls.length > 0) {
+      const unused = await getUnusedUrls(existingUrls);
       await Promise.all(
-        existingUrls.map((url) =>
+        unused.map((url) =>
           deleteFromSupabaseStorageByUrl(url).catch(() => undefined),
         ),
       );

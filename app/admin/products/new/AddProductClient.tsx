@@ -221,6 +221,7 @@ export default function AddProductClient({
   const [compareAt, setCompareAt] = useState(
     formatAmount(product?.compareAtCents),
   );
+  const [slug, setSlug] = useState(product?.slug ?? "");
   const [status, setStatus] = useState(
     product ? (product.active ? "active" : "draft") : "active",
   );
@@ -442,6 +443,9 @@ export default function AddProductClient({
         formData.append("compare_at", compareAt);
       }
       formData.append("status", status);
+      if (isEditing) {
+        formData.append("slug", slug.trim());
+      }
       collectionIds.forEach((id) => formData.append("collections", id));
       const variantPayload = variants
         .map((variant) => ({
@@ -844,6 +848,28 @@ export default function AddProductClient({
               </select>
             </CardContent>
           </Card>
+          {isEditing ? (
+            <Card className="border-neutral-200 bg-white shadow-sm">
+              <CardHeader>
+                <CardTitle>Slug</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <Field>
+                  <FieldLabel htmlFor="product-slug">URL slug</FieldLabel>
+                  <Input
+                    id="product-slug"
+                    name="slug"
+                    placeholder="short-sleeve-t-shirt"
+                    value={slug}
+                    onChange={(event) => setSlug(event.target.value)}
+                  />
+                </Field>
+                <p className="text-xs text-neutral-500">
+                  Public URL: /produit/{slug || "..."}
+                </p>
+              </CardContent>
+            </Card>
+          ) : null}
 
           <Card className="border-neutral-200 bg-white shadow-sm">
             <CardHeader>

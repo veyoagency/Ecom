@@ -60,12 +60,13 @@ async function ensureUniqueSlug(baseSlug: string, transaction?: Transaction) {
   return slug;
 }
 
-async function saveMediaFile(file: File) {
+async function saveMediaFile(file: File, baseName: string, position: number) {
   const arrayBuffer = await file.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
   const originalExt = path.extname(file.name || "").toLowerCase();
   const ext = originalExt || extensionFromType(file.type) || ".bin";
-  const filename = `${Date.now()}-${randomBytes(6).toString("hex")}${ext}`;
+  const safeBase = slugify(baseName) || "product";
+  const filename = `${safeBase}-${position + 1}-${Date.now()}-${randomBytes(4).toString("hex")}${ext}`;
   const objectPath = `${MEDIA_FOLDER}/${filename}`;
 
   return uploadToSupabaseStorage(
@@ -240,7 +241,7 @@ export async function POST(request: NextRequest) {
           if (!file) {
             throw new Error("Invalid media order.");
           }
-          const url = await saveMediaFile(file);
+          const url = await saveMediaFile(file, created.slug, mediaRecords.length);
           mediaRecords.push({
             product_id: created.id,
             url,
@@ -249,7 +250,7 @@ export async function POST(request: NextRequest) {
         }
       } else {
         for (const [index, file] of mediaEntries.entries()) {
-          const url = await saveMediaFile(file);
+          const url = await saveMediaFile(file, created.slug, index);
           mediaRecords.push({
             product_id: created.id,
             url,

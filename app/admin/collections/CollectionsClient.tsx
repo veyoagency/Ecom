@@ -38,6 +38,7 @@ type CollectionItem = {
   id: number;
   title: string;
   slug: string | null;
+  imageUrl: string | null;
   created_at: string;
   updated_at: string;
   productCount: number;
@@ -245,6 +246,7 @@ export default function CollectionsClient({
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-16" />
                   <TableHead>Title</TableHead>
                   <TableHead>Slug</TableHead>
                   <TableHead>Created</TableHead>
@@ -254,7 +256,7 @@ export default function CollectionsClient({
                 {filteredItems.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={3}
+                      colSpan={4}
                       className="text-center text-sm text-neutral-500"
                     >
                       No collections found.
@@ -266,6 +268,19 @@ export default function CollectionsClient({
                       key={collection.id}
                       href={`/admin/collections/${collection.id}`}
                     >
+                      <TableCell>
+                        <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-md bg-neutral-100">
+                          {collection.imageUrl ? (
+                            <img
+                              src={collection.imageUrl}
+                              alt={collection.title}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <div className="h-4 w-4 rounded-full bg-neutral-200" />
+                          )}
+                        </div>
+                      </TableCell>
                       <TableCell className="font-medium">
                         {collection.title}
                       </TableCell>

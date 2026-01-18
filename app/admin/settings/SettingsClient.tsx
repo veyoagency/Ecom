@@ -1,6 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type ChangeEvent,
+  type DragEvent,
+} from "react";
 
 import AdminShell from "@/app/admin/components/AdminShell";
 import { Button } from "@/components/ui/button";
@@ -29,6 +35,8 @@ type SettingsData = {
   websiteTitle: string;
   websiteDescription: string;
   defaultCurrency: string;
+  logoUrl: string;
+  logoTransparentUrl: string;
   brevoApiKey: string;
 };
 
@@ -71,6 +79,13 @@ export default function SettingsClient({ settings }: SettingsClientProps) {
   const [defaultCurrency, setDefaultCurrency] = useState(
     settings.defaultCurrency,
   );
+  const [logoUrl, setLogoUrl] = useState(settings.logoUrl);
+  const [logoTransparentUrl, setLogoTransparentUrl] = useState(
+    settings.logoTransparentUrl,
+  );
+  const [logoUploading, setLogoUploading] = useState<"default" | "transparent" | null>(null);
+  const [logoError, setLogoError] = useState("");
+  const [logoTransparentError, setLogoTransparentError] = useState("");
   const [brevoApiKey, setBrevoApiKey] = useState(settings.brevoApiKey);
   const [settingsError, setSettingsError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -122,6 +137,76 @@ export default function SettingsClient({ settings }: SettingsClientProps) {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function uploadLogo(file: File, variant: "default" | "transparent") {
+    if (logoUploading) return;
+    if (variant === "default") {
+      setLogoError("");
+    } else {
+      setLogoTransparentError("");
+    }
+    setLogoUploading(variant);
+
+    try {
+      const formData = new FormData();
+      formData.append("logo", file);
+      formData.append("variant", variant);
+
+      const response = await fetch("/api/admin/settings/logo", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        const message = data?.error || "Failed to upload logo.";
+        if (variant === "default") {
+          setLogoError(message);
+        } else {
+          setLogoTransparentError(message);
+        }
+        setLogoUploading(null);
+        return;
+      }
+
+      const nextUrl = data?.logoUrl?.toString();
+      if (nextUrl) {
+        if (variant === "default") {
+          setLogoUrl(nextUrl);
+        } else {
+          setLogoTransparentUrl(nextUrl);
+        }
+      }
+    } catch {
+      if (variant === "default") {
+        setLogoError("Failed to upload logo.");
+      } else {
+        setLogoTransparentError("Failed to upload logo.");
+      }
+    } finally {
+      setLogoUploading(null);
+    }
+  }
+
+  function handleLogoChange(
+    event: ChangeEvent<HTMLInputElement>,
+    variant: "default" | "transparent",
+  ) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    uploadLogo(file, variant);
+    event.target.value = "";
+  }
+
+  function handleLogoDrop(
+    event: DragEvent<HTMLLabelElement>,
+    variant: "default" | "transparent",
+  ) {
+    event.preventDefault();
+    const file = event.dataTransfer.files?.[0];
+    if (!file) return;
+    uploadLogo(file, variant);
   }
 
   async function loadUsers() {
@@ -255,6 +340,113 @@ export default function SettingsClient({ settings }: SettingsClientProps) {
                     </div>
 
                     <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-2 md:col-span-2">
+                        <label
+                          htmlFor="store-logo"
+                          className="text-sm font-medium text-neutral-700"
+                        >
+                          Logo
+                        </label>
+                        <div className="grid gap-4 md:grid-cols-2">
+                          <div className="space-y-2">
+                            <label
+                              htmlFor="store-logo"
+                              onDragOver={(event) => event.preventDefault()}
+                              onDrop={(event) =>
+                                handleLogoDrop(event, "default")
+                              }
+                              className="flex min-h-[120px] w-full cursor-pointer flex-col items-center justify-center gap-3 rounded-md border border-dashed border-neutral-200 bg-neutral-50 px-4 py-6 text-center text-sm text-neutral-500 transition hover:border-neutral-300"
+                            >
+                              {logoUrl ? (
+                                <img
+                                  src={logoUrl}
+                                  alt="Store logo"
+                                  className="max-h-24 w-auto object-contain"
+                                />
+                              ) : (
+                                <div>
+                                  <p className="font-medium text-neutral-700">
+                                    Drag & drop your logo
+                                  </p>
+                                  <p className="text-xs text-neutral-400">
+                                    or click to browse files
+                                  </p>
+                                </div>
+                              )}
+                              <input
+                                id="store-logo"
+                                type="file"
+                                accept="image/*"
+                                className="sr-only"
+                                onChange={(event) =>
+                                  handleLogoChange(event, "default")
+                                }
+                                disabled={logoUploading !== null}
+                              />
+                            </label>
+                            {logoUploading === "default" ? (
+                              <p className="text-xs text-neutral-500">
+                                Uploading logo...
+                              </p>
+                            ) : null}
+                            {logoError ? (
+                              <p className="text-xs text-red-600">
+                                {logoError}
+                              </p>
+                            ) : null}
+                          </div>
+                          <div className="space-y-2">
+                            <label
+                              htmlFor="store-logo-transparent"
+                              onDragOver={(event) => event.preventDefault()}
+                              onDrop={(event) =>
+                                handleLogoDrop(event, "transparent")
+                              }
+                              className="flex min-h-[120px] w-full cursor-pointer flex-col items-center justify-center gap-3 rounded-md border border-dashed border-neutral-200 bg-white px-4 py-6 text-center text-sm text-neutral-500 transition hover:border-neutral-300"
+                            >
+                              {logoTransparentUrl ? (
+                                <img
+                                  src={logoTransparentUrl}
+                                  alt="Transparent logo"
+                                  className="max-h-24 w-auto object-contain"
+                                />
+                              ) : (
+                                <div>
+                                  <p className="font-medium text-neutral-700">
+                                    Upload a transparent logo
+                                  </p>
+                                  <p className="text-xs text-neutral-400">
+                                    or click to browse files
+                                  </p>
+                                </div>
+                              )}
+                              <input
+                                id="store-logo-transparent"
+                                type="file"
+                                accept="image/*"
+                                className="sr-only"
+                                onChange={(event) =>
+                                  handleLogoChange(event, "transparent")
+                                }
+                                disabled={logoUploading !== null}
+                              />
+                            </label>
+                            {logoUploading === "transparent" ? (
+                              <p className="text-xs text-neutral-500">
+                                Uploading transparent logo...
+                              </p>
+                            ) : null}
+                            {logoTransparentError ? (
+                              <p className="text-xs text-red-600">
+                                {logoTransparentError}
+                              </p>
+                            ) : null}
+                          </div>
+                        </div>
+                        <p className="text-xs text-neutral-500">
+                          Recommended: transparent PNG or SVG, 400x200px.
+                        </p>
+                      </div>
                       <div className="space-y-2">
                         <label
                           htmlFor="store-name"
