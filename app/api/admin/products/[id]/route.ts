@@ -142,6 +142,7 @@ export async function PUT(
   const priceRaw = formData.get("price")?.toString().trim() ?? "";
   const compareAtRaw = formData.get("compare_at")?.toString().trim() ?? "";
   const status = formData.get("status")?.toString() ?? "active";
+  const inStock = formData.get("in_stock")?.toString() !== "0";
   const slugRaw = formData.get("slug")?.toString().trim() ?? "";
   const variantsRaw = formData.get("variants")?.toString() ?? "";
   const mediaOrderRaw = formData.get("media_order")?.toString() ?? "";
@@ -265,6 +266,7 @@ export async function PUT(
           price_cents: priceCents,
           compare_at_cents: compareAtCents,
           active,
+          in_stock: inStock,
         },
         { transaction },
       );

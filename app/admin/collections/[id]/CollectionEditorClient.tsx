@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import {
   Table,
   TableBody,
@@ -37,6 +38,7 @@ type CollectionEditorProps = {
     slug: string;
     descriptionHtml: string;
     imageUrl: string | null;
+    listingActive: boolean;
   };
   products: CollectionEditorProduct[];
 };
@@ -67,6 +69,9 @@ export default function CollectionEditorClient({
   const router = useRouter();
   const [title, setTitle] = useState(collection.title);
   const [slug, setSlug] = useState(collection.slug);
+  const [listingActive, setListingActive] = useState(
+    collection.listingActive ?? true,
+  );
   const [descriptionHtml, setDescriptionHtml] = useState(
     collection.descriptionHtml ?? "",
   );
@@ -130,6 +135,7 @@ export default function CollectionEditorClient({
       formData.append("title", title.trim());
       formData.append("slug", slug.trim());
       formData.append("description", descriptionHtml.trim());
+      formData.append("listing_active", listingActive ? "1" : "0");
       if (imageFile) {
         formData.append("image", imageFile);
       } else if (removeImage) {
@@ -280,6 +286,24 @@ export default function CollectionEditorClient({
                   required
                 />
               </Field>
+            </CardContent>
+          </Card>
+          <Card className="border-neutral-200 bg-white shadow-sm">
+            <CardHeader>
+              <CardTitle>Listing</CardTitle>
+            </CardHeader>
+            <CardContent className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium text-neutral-900">Visible</p>
+                <p className="text-xs text-neutral-500">
+                  Show this collection in storefront lists.
+                </p>
+              </div>
+              <Switch
+                checked={listingActive}
+                onCheckedChange={setListingActive}
+                aria-label="Toggle collection listing"
+              />
             </CardContent>
           </Card>
           <Card className="border-neutral-200 bg-white shadow-sm">

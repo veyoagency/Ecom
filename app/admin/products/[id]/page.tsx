@@ -74,6 +74,7 @@ export default async function AdminEditProductPage({
         "price_cents",
         "compare_at_cents",
         "active",
+        "in_stock",
       ],
       include: [
         {
@@ -123,6 +124,7 @@ export default async function AdminEditProductPage({
     price_cents: number;
     compare_at_cents: number | null;
     active: boolean;
+    in_stock?: boolean;
     images?: Array<{ url: string; position: number | null }>;
     collections?: Array<{ id: number; title: string; slug: string | null }>;
     options?: Array<{
@@ -168,6 +170,7 @@ export default async function AdminEditProductPage({
         priceCents: productJson.price_cents,
         compareAtCents: productJson.compare_at_cents,
         active: productJson.active,
+        inStock: productJson.in_stock ?? true,
         collectionIds: (productJson.collections ?? []).map((collection) =>
           Number(collection.id),
         ),

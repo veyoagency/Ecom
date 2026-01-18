@@ -77,6 +77,7 @@ type ProductInitial = {
   priceCents: number;
   compareAtCents: number | null;
   active: boolean;
+  inStock: boolean;
   collectionIds: number[];
   media: ProductMediaInput[];
   variants: ProductVariantInput[];
@@ -114,6 +115,10 @@ function createMediaId() {
     return crypto.randomUUID();
   }
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function createStableMediaId(url: string, position: number) {
+  return `existing-${position}-${url}`;
 }
 
 function stripHtml(value: string) {
@@ -225,6 +230,7 @@ export default function AddProductClient({
   const [status, setStatus] = useState(
     product ? (product.active ? "active" : "draft") : "active",
   );
+  const [inStock, setInStock] = useState(product?.inStock ?? true);
   const [collectionIds, setCollectionIds] = useState<string[]>(
     product ? product.collectionIds.map((id) => String(id)) : [],
   );
@@ -233,7 +239,7 @@ export default function AddProductClient({
     return [...product.media]
       .sort((a, b) => a.position - b.position)
       .map((media) => ({
-        id: createMediaId(),
+        id: createStableMediaId(media.url, media.position),
         file: undefined,
         url: media.url,
         kind: media.kind ?? inferMediaKind(media.url),
@@ -443,6 +449,7 @@ export default function AddProductClient({
         formData.append("compare_at", compareAt);
       }
       formData.append("status", status);
+      formData.append("in_stock", inStock ? "1" : "0");
       if (isEditing) {
         formData.append("slug", slug.trim());
       }
@@ -846,6 +853,22 @@ export default function AddProductClient({
                 <option value="active">Active</option>
                 <option value="draft">Draft</option>
               </select>
+            </CardContent>
+          </Card>
+          <Card className="border-neutral-200 bg-white shadow-sm">
+            <CardHeader>
+              <CardTitle>Disponibilite</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <label className="flex items-center gap-3 text-sm text-neutral-700">
+                <input
+                  type="checkbox"
+                  checked={inStock}
+                  onChange={(event) => setInStock(event.target.checked)}
+                  className="h-4 w-4 rounded border-neutral-300"
+                />
+                <span>{inStock ? "En stock" : "Rupture de stock"}</span>
+              </label>
             </CardContent>
           </Card>
           {isEditing ? (

@@ -105,6 +105,7 @@ export async function PUT(
   const title = formData.get("title")?.toString().trim() ?? "";
   const slugInput = formData.get("slug")?.toString().trim() ?? "";
   const description = formData.get("description")?.toString().trim() ?? "";
+  const listingActive = formData.get("listing_active")?.toString() !== "0";
   const removeImage = formData.get("remove_image")?.toString() === "1";
 
   if (!title) {
@@ -147,6 +148,7 @@ export async function PUT(
         description: string | null;
         slug?: string;
         image_url?: string | null;
+        listing_active?: boolean;
       } = {
         title,
         description: description || null,
@@ -160,6 +162,7 @@ export async function PUT(
       if (uniqueSlug !== collection.slug) {
         payload.slug = uniqueSlug;
       }
+      payload.listing_active = listingActive;
 
       if (imageFile && imageFile instanceof File) {
         payload.image_url = await saveImageFile(imageFile, title);

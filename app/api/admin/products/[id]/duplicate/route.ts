@@ -102,6 +102,7 @@ export async function POST(
     price_cents: number;
     compare_at_cents: number | null;
     active: boolean;
+    in_stock?: boolean;
     images?: Array<{ url: string; position: number | null }>;
     collections?: Array<{ id: number }>;
     options?: Array<{
@@ -128,6 +129,7 @@ export async function POST(
           price_cents: productJson.price_cents,
           compare_at_cents: productJson.compare_at_cents,
           active: false,
+          in_stock: productJson.in_stock ?? true,
         },
         { transaction },
       );

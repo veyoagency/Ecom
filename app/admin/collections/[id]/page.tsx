@@ -56,7 +56,7 @@ export default async function AdminCollectionEditPage({
 
   const [collection, products] = await Promise.all([
     Collection.findByPk(collectionId, {
-      attributes: ["id", "title", "slug", "description", "image_url"],
+      attributes: ["id", "title", "slug", "description", "image_url", "listing_active"],
     }),
     Product.findAll({
       attributes: ["id", "title", "price_cents", "active", "created_at"],
@@ -118,6 +118,7 @@ export default async function AdminCollectionEditPage({
         slug: collection.slug ?? "",
         descriptionHtml: collection.description ?? "",
         imageUrl: collection.image_url ?? null,
+        listingActive: collection.listing_active ?? true,
       }}
       products={productItems}
     />

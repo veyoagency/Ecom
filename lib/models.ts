@@ -31,6 +31,7 @@ export class Product extends Model {
   declare price_cents: number;
   declare compare_at_cents: number | null;
   declare active: boolean;
+  declare in_stock: boolean;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -64,6 +65,11 @@ Product.init(
       allowNull: true,
     },
     active: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: true,
+    },
+    in_stock: {
       type: DataTypes.BOOLEAN,
       allowNull: false,
       defaultValue: true,
@@ -284,6 +290,7 @@ export class Collection extends Model {
   declare title: string;
   declare description: string | null;
   declare image_url: string | null;
+  declare listing_active: boolean;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -311,6 +318,11 @@ Collection.init(
     image_url: {
       type: DataTypes.TEXT,
       allowNull: true,
+    },
+    listing_active: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: true,
     },
     created_at: {
       type: DataTypes.DATE,

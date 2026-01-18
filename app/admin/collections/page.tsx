@@ -47,7 +47,15 @@ export default async function AdminCollectionsPage() {
 
   const [collections, collectionCounts] = await Promise.all([
     Collection.findAll({
-      attributes: ["id", "title", "slug", "image_url", "created_at", "updated_at"],
+      attributes: [
+        "id",
+        "title",
+        "slug",
+        "image_url",
+        "listing_active",
+        "created_at",
+        "updated_at",
+      ],
       order: [["title", "ASC"]],
     }),
     ProductCollection.findAll({
@@ -73,6 +81,7 @@ export default async function AdminCollectionsPage() {
         title: collection.title,
         slug: collection.slug,
         imageUrl: collection.image_url ?? null,
+        listingActive: collection.listing_active ?? true,
         created_at: collection.created_at.toISOString(),
         updated_at: collection.updated_at.toISOString(),
         productCount: countsById.get(Number(collection.id)) ?? 0,

@@ -32,7 +32,7 @@ export default function StoreHeader({
       className={
         transparent
           ? "absolute inset-x-0 top-0 z-20 bg-transparent text-white"
-          : "border-b border-neutral-200 bg-white"
+          : "bg-white"
       }
     >
       <div className="mx-auto flex h-16 max-w-6xl items-center px-4 sm:px-6">
@@ -112,15 +112,11 @@ export default function StoreHeader({
               <SheetContent side="right" className={sheetClassName}>
                 <SheetHeader>
                   <SheetTitle>Cart</SheetTitle>
-                  <SheetDescription>
-                    Your selected items will appear here.
-                  </SheetDescription>
                 </SheetHeader>
                 <div className="flex flex-1 flex-col gap-4 px-4 pb-6">
                   <div className="rounded-lg border border-dashed border-neutral-200 p-6 text-center text-sm text-neutral-500">
                     Your cart is empty.
                   </div>
-                  <Button className="mt-auto">Checkout</Button>
                 </div>
               </SheetContent>
             </Sheet>

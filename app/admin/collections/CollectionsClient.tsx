@@ -6,6 +6,7 @@ import { Filter, Search } from "lucide-react";
 
 import AdminShell from "@/app/admin/components/AdminShell";
 import ClickableTableRow from "@/app/admin/components/ClickableTableRow";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -39,6 +40,7 @@ type CollectionItem = {
   title: string;
   slug: string | null;
   imageUrl: string | null;
+  listingActive: boolean;
   created_at: string;
   updated_at: string;
   productCount: number;
@@ -126,9 +128,31 @@ export default function CollectionsClient({
         return;
       }
 
-      const created = data?.collection as CollectionItem | undefined;
+      const created = data?.collection as
+        | {
+            id: number;
+            title: string;
+            slug: string | null;
+            image_url?: string | null;
+            listing_active?: boolean;
+            created_at: string;
+            updated_at: string;
+          }
+        | undefined;
       if (created) {
-        setItems((prev) => [created, ...prev]);
+        setItems((prev) => [
+          {
+            id: created.id,
+            title: created.title,
+            slug: created.slug ?? null,
+            imageUrl: created.image_url ?? null,
+            listingActive: created.listing_active ?? true,
+            created_at: created.created_at,
+            updated_at: created.updated_at,
+            productCount: 0,
+          },
+          ...prev,
+        ]);
       }
       setName("");
       setOpen(false);
@@ -249,6 +273,7 @@ export default function CollectionsClient({
                   <TableHead className="w-16" />
                   <TableHead>Title</TableHead>
                   <TableHead>Slug</TableHead>
+                  <TableHead>Listing</TableHead>
                   <TableHead>Created</TableHead>
                 </TableRow>
             </TableHeader>
@@ -256,7 +281,7 @@ export default function CollectionsClient({
                 {filteredItems.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={4}
+                      colSpan={5}
                       className="text-center text-sm text-neutral-500"
                     >
                       No collections found.
@@ -285,6 +310,18 @@ export default function CollectionsClient({
                         {collection.title}
                       </TableCell>
                       <TableCell>{collection.slug}</TableCell>
+                      <TableCell>
+                        <Badge
+                          variant="secondary"
+                          className={
+                            collection.listingActive
+                              ? "border border-emerald-200 bg-emerald-50 text-emerald-700"
+                              : "border border-neutral-200 bg-neutral-100 text-neutral-600"
+                          }
+                        >
+                          {collection.listingActive ? "Active" : "Hidden"}
+                        </Badge>
+                      </TableCell>
                       <TableCell>
                         {formatDateTime(collection.created_at)}
                       </TableCell>
