@@ -25,10 +25,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
 import { auth } from "@/lib/auth";
 import { isAdminEmail } from "@/lib/admin-config";
 import { DEFAULT_PAGE_SIZE } from "@/lib/constants";
-import { Op, Order, OrderItem } from "@/lib/models";
+import { Op, Order, OrderItem, OrderTag, OrderTagAssignment } from "@/lib/models";
 import { Filter, Search } from "lucide-react";
 
 export const metadata = {
@@ -59,12 +60,61 @@ function formatCurrency(cents: number) {
   }).format(cents / 100);
 }
 
-function formatDate(value: Date) {
-  return new Intl.DateTimeFormat("fr-FR", {
-    day: "2-digit",
+function formatOrderNumber(orderNumber: number | null, id: number) {
+  if (orderNumber && Number.isFinite(orderNumber)) {
+    return `#${orderNumber}`;
+  }
+  return `#${1000 + id}`;
+}
+
+function formatRelativeDate(value: Date) {
+  const date = new Date(value);
+  const now = new Date();
+  const startOfToday = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+  );
+  const startOfYesterday = new Date(startOfToday);
+  startOfYesterday.setDate(startOfToday.getDate() - 1);
+
+  const time = new Intl.DateTimeFormat("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
+
+  if (date >= startOfToday) {
+    return `Today at ${time}`;
+  }
+  if (date >= startOfYesterday && date < startOfToday) {
+    return `Yesterday at ${time}`;
+  }
+  return new Intl.DateTimeFormat("en-US", {
     month: "short",
+    day: "numeric",
     year: "numeric",
-  }).format(new Date(value));
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function formatCustomerName(firstName: string, lastName: string, email: string) {
+  const name = `${firstName ?? ""} ${lastName ?? ""}`.trim();
+  return name || email;
+}
+
+function getPaymentStatus(status: string) {
+  if (status === "paid" || status === "fulfilled") {
+    return { label: "Paid", variant: "muted" as const, dot: "bg-neutral-400" };
+  }
+  return { label: "Unpaid", variant: "outline" as const, dot: "bg-amber-500" };
+}
+
+function getFulfillmentStatus(status: string) {
+  if (status === "fulfilled") {
+    return { label: "Fulfilled", className: "bg-emerald-100 text-emerald-800" };
+  }
+  return { label: "Unfulfilled", className: "bg-amber-100 text-amber-900" };
 }
 
 function buildPageHref(searchParams: SearchParams, page: number) {
@@ -186,8 +236,11 @@ export default async function AdminOrdersPage({
       attributes: [
         "id",
         "public_id",
+        "order_number",
         "status",
         "email",
+        "first_name",
+        "last_name",
         "total_cents",
         "created_at",
         [Sequelize.fn("COUNT", Sequelize.col("items.id")), "items_count"],
@@ -209,6 +262,35 @@ export default async function AdminOrdersPage({
     Order.count({ where }),
   ]);
 
+  const orderIds = orders
+    .map((order) => Number(order.id))
+    .filter((id) => Number.isFinite(id) && id > 0);
+  const tagsByOrderId = new Map<string, Array<{ id: number; name: string }>>();
+  if (orderIds.length > 0) {
+    const assignments = await OrderTagAssignment.findAll({
+      where: { order_id: orderIds },
+      include: [
+        {
+          model: OrderTag,
+          as: "tag",
+          attributes: ["id", "name"],
+        },
+      ],
+      order: [[{ model: OrderTag, as: "tag" }, "name", "ASC"]],
+    });
+
+    assignments.forEach((assignment) => {
+      const data = assignment.toJSON() as Record<string, unknown>;
+      const orderId = Number(data.order_id);
+      const tag = data.tag as { id: number; name: string } | undefined;
+      if (!Number.isFinite(orderId) || !tag) return;
+      const key = String(orderId);
+      const list = tagsByOrderId.get(key) ?? [];
+      list.push({ id: tag.id, name: tag.name });
+      tagsByOrderId.set(key, list);
+    });
+  }
+
   const totalPages = Math.max(1, Math.ceil(total / limit));
   const canPrev = page > 1;
   const canNext = page < totalPages;
@@ -218,11 +300,15 @@ export default async function AdminOrdersPage({
     return {
       id: order.id,
       publicId: data.public_id as string,
+      orderNumber: data.order_number ? Number(data.order_number) : null,
       status: data.status as string,
       email: data.email as string,
+      firstName: (data.first_name as string) ?? "",
+      lastName: (data.last_name as string) ?? "",
       totalCents: Number(data.total_cents ?? 0),
       createdAt: data.created_at as Date,
       itemsCount: Number(data.items_count ?? 0),
+      tags: tagsByOrderId.get(String(order.id)) ?? [],
     };
   });
 
@@ -347,32 +433,94 @@ export default async function AdminOrdersPage({
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>ID</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Items</TableHead>
+                <TableHead className="w-10">
+                  <input type="checkbox" aria-label="Select all orders" />
+                </TableHead>
+                <TableHead>Order</TableHead>
+                <TableHead>Date</TableHead>
+                <TableHead>Customer</TableHead>
                 <TableHead>Total</TableHead>
-                <TableHead>Created</TableHead>
+                <TableHead>Payment status</TableHead>
+                <TableHead>Fulfillment status</TableHead>
+                <TableHead>Items</TableHead>
+                <TableHead>Delivery status</TableHead>
+                <TableHead>Delivery method</TableHead>
+                <TableHead>Tags</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {rows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-sm text-neutral-500">
+                  <TableCell colSpan={11} className="text-center text-sm text-neutral-500">
                     No orders found.
                   </TableCell>
                 </TableRow>
               ) : (
-                rows.map((row) => (
-                  <TableRow key={row.id}>
-                    <TableCell className="font-medium">{row.publicId}</TableCell>
-                    <TableCell>{row.status}</TableCell>
-                    <TableCell>{row.email}</TableCell>
-                    <TableCell>{row.itemsCount}</TableCell>
-                    <TableCell>{formatCurrency(row.totalCents)}</TableCell>
-                    <TableCell>{formatDate(row.createdAt)}</TableCell>
-                  </TableRow>
-                ))
+                rows.map((row) => {
+                  const payment = getPaymentStatus(row.status);
+                  const fulfillment = getFulfillmentStatus(row.status);
+                  return (
+                    <TableRow key={row.id}>
+                      <TableCell>
+                        <input
+                          type="checkbox"
+                          aria-label={`Select order ${row.publicId}`}
+                        />
+                      </TableCell>
+                      <TableCell className="font-medium">
+                        <Link
+                          href={`/admin/orders/${row.publicId}`}
+                          className="text-neutral-900 hover:underline"
+                        >
+                          {formatOrderNumber(row.orderNumber, row.id)}
+                        </Link>
+                      </TableCell>
+                      <TableCell>{formatRelativeDate(row.createdAt)}</TableCell>
+                      <TableCell>
+                        {formatCustomerName(
+                          row.firstName,
+                          row.lastName,
+                          row.email,
+                        )}
+                      </TableCell>
+                      <TableCell>{formatCurrency(row.totalCents)}</TableCell>
+                      <TableCell>
+                        <Badge variant={payment.variant} className="gap-1">
+                          <span
+                            className={`h-1.5 w-1.5 rounded-full ${payment.dot}`}
+                          />
+                          {payment.label}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant="secondary"
+                          className={fulfillment.className}
+                        >
+                          {fulfillment.label}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {row.itemsCount} {row.itemsCount === 1 ? "item" : "items"}
+                      </TableCell>
+                      <TableCell className="text-neutral-500">—</TableCell>
+                      <TableCell className="text-neutral-500">—</TableCell>
+                      <TableCell>
+                        {row.tags.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {row.tags.map((tag) => (
+                              <Badge key={tag.id} variant="outline" className="text-xs">
+                                {tag.name}
+                              </Badge>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-neutral-400">—</span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
               )}
             </TableBody>
           </Table>

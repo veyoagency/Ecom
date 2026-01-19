@@ -222,7 +222,20 @@ export class WebsiteSetting extends Model {
   declare default_currency: string;
   declare logo_url: string | null;
   declare logo_transparent_url: string | null;
-  declare brevo_api_key: string | null;
+  declare brevo_api_key_encrypted: string | null;
+  declare brevo_api_key_hint: string | null;
+  declare stripe_publishable_key_encrypted: string | null;
+  declare stripe_publishable_key_hint: string | null;
+  declare stripe_secret_key_encrypted: string | null;
+  declare stripe_secret_key_hint: string | null;
+  declare paypal_client_id_encrypted: string | null;
+  declare paypal_client_id_hint: string | null;
+  declare paypal_client_secret_encrypted: string | null;
+  declare paypal_client_secret_hint: string | null;
+  declare sendcloud_public_key_encrypted: string | null;
+  declare sendcloud_public_key_hint: string | null;
+  declare sendcloud_private_key_encrypted: string | null;
+  declare sendcloud_private_key_hint: string | null;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -264,7 +277,59 @@ WebsiteSetting.init(
       type: DataTypes.TEXT,
       allowNull: true,
     },
-    brevo_api_key: {
+    brevo_api_key_encrypted: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    brevo_api_key_hint: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    stripe_publishable_key_encrypted: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    stripe_publishable_key_hint: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    stripe_secret_key_encrypted: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    stripe_secret_key_hint: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    paypal_client_id_encrypted: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    paypal_client_id_hint: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    paypal_client_secret_encrypted: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    paypal_client_secret_hint: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    sendcloud_public_key_encrypted: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    sendcloud_public_key_hint: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    sendcloud_private_key_encrypted: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    sendcloud_private_key_hint: {
       type: DataTypes.TEXT,
       allowNull: true,
     },
@@ -435,7 +500,19 @@ DiscountCode.init(
 export class Order extends Model {
   declare id: number;
   declare public_id: string;
+  declare order_number: number | null;
   declare status: string;
+  declare paypal_order_id: string | null;
+  declare paypal_capture_id: string | null;
+  declare stripe_payment_intent_id: string | null;
+  declare stripe_charge_id: string | null;
+  declare stripe_risk_score: number | null;
+  declare stripe_risk_level: string | null;
+  declare stripe_risk_reason: string | null;
+  declare stripe_risk_rule: string | null;
+  declare stripe_seller_message: string | null;
+  declare stripe_outcome_type: string | null;
+  declare stripe_network_status: string | null;
   declare first_name: string;
   declare last_name: string;
   declare email: string;
@@ -467,6 +544,55 @@ Order.init(
       type: DataTypes.TEXT,
       allowNull: false,
       unique: true,
+    },
+    order_number: {
+      type: DataTypes.BIGINT,
+      allowNull: false,
+      defaultValue: Sequelize.literal("nextval('orders_order_number_seq')"),
+    },
+    paypal_order_id: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    paypal_capture_id: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    stripe_payment_intent_id: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    stripe_charge_id: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    stripe_risk_score: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    stripe_risk_level: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    stripe_risk_reason: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    stripe_risk_rule: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    stripe_seller_message: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    stripe_outcome_type: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    stripe_network_status: {
+      type: DataTypes.TEXT,
+      allowNull: true,
     },
     status: {
       type: DataTypes.ENUM(
@@ -569,6 +695,76 @@ export class OrderItem extends Model {
   declare qty: number;
 }
 
+export class OrderTag extends Model {
+  declare id: number;
+  declare name: string;
+  declare created_at: Date;
+  declare updated_at: Date;
+}
+
+OrderTag.init(
+  {
+    id: {
+      type: DataTypes.BIGINT,
+      autoIncrement: true,
+      primaryKey: true,
+    },
+    name: {
+      type: DataTypes.TEXT,
+      allowNull: false,
+      unique: true,
+    },
+    created_at: {
+      type: DataTypes.DATE,
+    },
+    updated_at: {
+      type: DataTypes.DATE,
+    },
+  },
+  {
+    sequelize,
+    tableName: "order_tags",
+    timestamps: true,
+    createdAt: "created_at",
+    updatedAt: "updated_at",
+  },
+);
+
+export class OrderTagAssignment extends Model {
+  declare id: number;
+  declare order_id: number;
+  declare tag_id: number;
+  declare created_at: Date;
+}
+
+OrderTagAssignment.init(
+  {
+    id: {
+      type: DataTypes.BIGINT,
+      autoIncrement: true,
+      primaryKey: true,
+    },
+    order_id: {
+      type: DataTypes.BIGINT,
+      allowNull: false,
+    },
+    tag_id: {
+      type: DataTypes.BIGINT,
+      allowNull: false,
+    },
+    created_at: {
+      type: DataTypes.DATE,
+    },
+  },
+  {
+    sequelize,
+    tableName: "order_tag_assignments",
+    timestamps: true,
+    createdAt: "created_at",
+    updatedAt: false,
+  },
+);
+
 OrderItem.init(
   {
     id: {
@@ -645,5 +841,26 @@ Order.belongsTo(DiscountCode, {
 
 Order.hasMany(OrderItem, { foreignKey: "order_id", as: "items" });
 OrderItem.belongsTo(Order, { foreignKey: "order_id", as: "order" });
+
+Order.belongsToMany(OrderTag, {
+  through: OrderTagAssignment,
+  foreignKey: "order_id",
+  otherKey: "tag_id",
+  as: "tags",
+});
+OrderTag.belongsToMany(Order, {
+  through: OrderTagAssignment,
+  foreignKey: "tag_id",
+  otherKey: "order_id",
+  as: "orders",
+});
+OrderTagAssignment.belongsTo(OrderTag, {
+  foreignKey: "tag_id",
+  as: "tag",
+});
+OrderTagAssignment.belongsTo(Order, {
+  foreignKey: "order_id",
+  as: "order",
+});
 
 export { Op };

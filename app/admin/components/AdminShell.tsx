@@ -55,6 +55,7 @@ type NavItem = {
 
 type AdminShellProps = {
   title: string;
+  titleNode?: ReactNode;
   current:
     | "dashboard"
     | "orders"
@@ -115,6 +116,7 @@ const NAV_ITEMS: NavItem[] = [
 
 export default function AdminShell({
   title,
+  titleNode,
   current,
   action,
   children,
@@ -218,9 +220,13 @@ export default function AdminShell({
           <div className="mb-6 flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <SidebarTrigger className="rounded-full border border-neutral-200 bg-white text-neutral-600 shadow-sm" />
-              <h1 className="text-2xl font-semibold text-neutral-900">
-                {title}
-              </h1>
+              {titleNode ? (
+                <div className="flex flex-wrap items-start gap-2">{titleNode}</div>
+              ) : (
+                <h1 className="text-2xl font-semibold text-neutral-900">
+                  {title}
+                </h1>
+              )}
             </div>
             {action ? <div className="flex items-center">{action}</div> : null}
           </div>

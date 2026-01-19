@@ -2,7 +2,8 @@ import localFont from "next/font/local";
 import { notFound } from "next/navigation";
 import { Op } from "sequelize";
 
-import ProductVariantsClient from "@/app/produit/[slug]/ProductVariantsClient";
+import ProductPurchaseClient from "@/app/produit/[slug]/ProductPurchaseClient";
+import StorefrontCartProvider from "@/components/storefront/StorefrontCartProvider";
 import ProductCard from "@/components/storefront/ProductCard";
 import StoreFooterServer from "@/components/storefront/StoreFooterServer";
 import StoreHeaderServer from "@/components/storefront/StoreHeaderServer";
@@ -139,6 +140,7 @@ export default async function ProductPage({
       url: image.url,
       kind: inferMediaKind(image.url),
     }));
+  const primaryImage = images[0]?.url ?? null;
 
   const options = (productJson.options ?? [])
     .slice()
@@ -206,13 +208,14 @@ export default async function ProductPage({
   });
 
   return (
-    <div
-      className={`storefront ${futura.className} min-h-screen bg-neutral-50 text-neutral-900`}
-    >
-      <StoreHeaderServer fontClassName={futura.className} />
-      <main className="bg-white py-5">
-        <div className="mx-auto flex max-w-[1500px] flex-col gap-8 px-0 sm:px-6">
-          <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+    <StorefrontCartProvider>
+      <div
+        className={`storefront ${futura.className} min-h-screen bg-neutral-50 text-neutral-900`}
+      >
+        <StoreHeaderServer fontClassName={futura.className} />
+        <main className="bg-white py-5">
+          <div className="mx-auto flex max-w-[1500px] flex-col gap-8 px-0 sm:px-6">
+            <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
             <div className="no-scrollbar flex gap-4 overflow-x-auto snap-x snap-mandatory">
               {images.length === 0 ? (
                 <div className="aspect-[4/5] min-w-[85%] snap-start bg-neutral-100 sm:min-w-[70%] lg:min-w-full" />
@@ -275,15 +278,17 @@ export default async function ProductPage({
                 </div>
               </div>
 
-              <ProductVariantsClient options={options} />
-
-              <button
-                type="button"
-                disabled={!productJson.in_stock}
-                className="w-full rounded-none bg-black py-3 text-sm uppercase text-white disabled:cursor-not-allowed disabled:bg-neutral-300"
-              >
-                Ajouter au panier
-              </button>
+              <ProductPurchaseClient
+                product={{
+                  id: Number(productJson.id),
+                  slug: productJson.slug,
+                  title: productJson.title,
+                  priceCents: productJson.price_cents,
+                  imageUrl: primaryImage,
+                }}
+                inStock={productJson.in_stock ?? true}
+                options={options}
+              />
 
               {productJson.description_html ? (
                 <div
@@ -352,9 +357,10 @@ export default async function ProductPage({
               </div>
             </section>
           ) : null}
-        </div>
-      </main>
-      <StoreFooterServer fontClassName={futura.className} />
-    </div>
+          </div>
+        </main>
+        <StoreFooterServer fontClassName={futura.className} />
+      </div>
+    </StorefrontCartProvider>
   );
 }

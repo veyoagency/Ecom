@@ -7,6 +7,7 @@ import {
   type ChangeEvent,
   type DragEvent,
 } from "react";
+import { Check } from "lucide-react";
 
 import AdminShell from "@/app/admin/components/AdminShell";
 import { Button } from "@/components/ui/button";
@@ -37,7 +38,13 @@ type SettingsData = {
   defaultCurrency: string;
   logoUrl: string;
   logoTransparentUrl: string;
-  brevoApiKey: string;
+  brevoApiKeyHint: string | null;
+  stripePublishableKeyHint: string | null;
+  stripeSecretKeyHint: string | null;
+  paypalClientIdHint: string | null;
+  paypalClientSecretHint: string | null;
+  sendcloudPublicKeyHint: string | null;
+  sendcloudPrivateKeyHint: string | null;
 };
 
 type SettingsClientProps = {
@@ -51,10 +58,20 @@ type AdminUser = {
   createdAt: string;
 };
 
-const MENU_ITEMS = ["General", "Emailing", "Shipping", "Users"] as const;
+const MENU_ITEMS = ["General", "Emailing", "Payments", "Shipping", "Users"] as const;
 type MenuItem = (typeof MENU_ITEMS)[number];
 const selectClassName =
   "border-input h-9 w-full rounded-md border bg-transparent px-3 py-1 text-sm shadow-sm outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]";
+
+function KeyStatus({ active }: { active: boolean }) {
+  if (!active) return null;
+  return (
+    <span className="inline-flex items-center gap-1 text-xs text-emerald-600">
+      <Check className="h-3.5 w-3.5" aria-hidden="true" />
+      Saved
+    </span>
+  );
+}
 
 function formatDateTime(value: string) {
   return new Intl.DateTimeFormat("fr-FR", {
@@ -86,7 +103,34 @@ export default function SettingsClient({ settings }: SettingsClientProps) {
   const [logoUploading, setLogoUploading] = useState<"default" | "transparent" | null>(null);
   const [logoError, setLogoError] = useState("");
   const [logoTransparentError, setLogoTransparentError] = useState("");
-  const [brevoApiKey, setBrevoApiKey] = useState(settings.brevoApiKey);
+  const [brevoApiKey, setBrevoApiKey] = useState("");
+  const [brevoApiKeyHint, setBrevoApiKeyHint] = useState(
+    settings.brevoApiKeyHint,
+  );
+  const [stripePublishableKey, setStripePublishableKey] = useState("");
+  const [stripeSecretKey, setStripeSecretKey] = useState("");
+  const [stripePublishableKeyHint, setStripePublishableKeyHint] = useState(
+    settings.stripePublishableKeyHint,
+  );
+  const [stripeSecretKeyHint, setStripeSecretKeyHint] = useState(
+    settings.stripeSecretKeyHint,
+  );
+  const [paypalClientId, setPaypalClientId] = useState("");
+  const [paypalClientSecret, setPaypalClientSecret] = useState("");
+  const [paypalClientIdHint, setPaypalClientIdHint] = useState(
+    settings.paypalClientIdHint,
+  );
+  const [paypalClientSecretHint, setPaypalClientSecretHint] = useState(
+    settings.paypalClientSecretHint,
+  );
+  const [sendcloudPublicKey, setSendcloudPublicKey] = useState("");
+  const [sendcloudPrivateKey, setSendcloudPrivateKey] = useState("");
+  const [sendcloudPublicKeyHint, setSendcloudPublicKeyHint] = useState(
+    settings.sendcloudPublicKeyHint,
+  );
+  const [sendcloudPrivateKeyHint, setSendcloudPrivateKeyHint] = useState(
+    settings.sendcloudPrivateKeyHint,
+  );
   const [settingsError, setSettingsError] = useState("");
   const [loading, setLoading] = useState(false);
   const [users, setUsers] = useState<AdminUser[]>([]);
@@ -123,6 +167,12 @@ export default function SettingsClient({ settings }: SettingsClientProps) {
           websiteDescription,
           defaultCurrency,
           brevoApiKey,
+          stripePublishableKey,
+          stripeSecretKey,
+          paypalClientId,
+          paypalClientSecret,
+          sendcloudPublicKey,
+          sendcloudPrivateKey,
         }),
       });
 
@@ -131,6 +181,62 @@ export default function SettingsClient({ settings }: SettingsClientProps) {
         setSettingsError(data?.error || "Failed to save settings.");
         setLoading(false);
         return;
+      }
+      const nextPublishableHint =
+        data?.settings?.stripe_publishable_key_hint?.toString() ?? null;
+      const nextSecretHint =
+        data?.settings?.stripe_secret_key_hint?.toString() ?? null;
+      if (nextPublishableHint !== null) {
+        setStripePublishableKeyHint(nextPublishableHint);
+      }
+      if (nextSecretHint !== null) {
+        setStripeSecretKeyHint(nextSecretHint);
+      }
+      const nextBrevoHint =
+        data?.settings?.brevo_api_key_hint?.toString() ?? null;
+      if (nextBrevoHint !== null) {
+        setBrevoApiKeyHint(nextBrevoHint);
+      }
+      const nextPaypalClientIdHint =
+        data?.settings?.paypal_client_id_hint?.toString() ?? null;
+      const nextPaypalClientSecretHint =
+        data?.settings?.paypal_client_secret_hint?.toString() ?? null;
+      if (nextPaypalClientIdHint !== null) {
+        setPaypalClientIdHint(nextPaypalClientIdHint);
+      }
+      if (nextPaypalClientSecretHint !== null) {
+        setPaypalClientSecretHint(nextPaypalClientSecretHint);
+      }
+      const nextSendcloudPublicHint =
+        data?.settings?.sendcloud_public_key_hint?.toString() ?? null;
+      const nextSendcloudPrivateHint =
+        data?.settings?.sendcloud_private_key_hint?.toString() ?? null;
+      if (nextSendcloudPublicHint !== null) {
+        setSendcloudPublicKeyHint(nextSendcloudPublicHint);
+      }
+      if (nextSendcloudPrivateHint !== null) {
+        setSendcloudPrivateKeyHint(nextSendcloudPrivateHint);
+      }
+      if (stripePublishableKey) {
+        setStripePublishableKey("");
+      }
+      if (stripeSecretKey) {
+        setStripeSecretKey("");
+      }
+      if (brevoApiKey) {
+        setBrevoApiKey("");
+      }
+      if (paypalClientId) {
+        setPaypalClientId("");
+      }
+      if (paypalClientSecret) {
+        setPaypalClientSecret("");
+      }
+      if (sendcloudPublicKey) {
+        setSendcloudPublicKey("");
+      }
+      if (sendcloudPrivateKey) {
+        setSendcloudPrivateKey("");
       }
     } catch {
       setSettingsError("Failed to save settings.");
@@ -280,7 +386,10 @@ export default function SettingsClient({ settings }: SettingsClientProps) {
       <DialogTrigger asChild>
         <Button size="sm">Add user</Button>
       </DialogTrigger>
-    ) : activeMenu === "General" || activeMenu === "Emailing" ? (
+    ) : activeMenu === "General" ||
+      activeMenu === "Emailing" ||
+      activeMenu === "Payments" ||
+      activeMenu === "Shipping" ? (
       <Button size="sm" onClick={handleSubmit} disabled={!isValid || loading}>
         {loading ? "Saving..." : "Save changes"}
       </Button>
@@ -610,22 +719,241 @@ export default function SettingsClient({ settings }: SettingsClientProps) {
                     </div>
 
                     <div className="space-y-2">
-                      <label
-                        htmlFor="brevo-api-key"
-                        className="text-sm font-medium text-neutral-700"
-                      >
-                        Brevo secret key
-                      </label>
+                      <div className="flex items-center gap-2">
+                        <label
+                          htmlFor="brevo-api-key"
+                          className="text-sm font-medium text-neutral-700"
+                        >
+                          Brevo secret key
+                        </label>
+                        <KeyStatus active={Boolean(brevoApiKeyHint)} />
+                      </div>
                       <Input
                         id="brevo-api-key"
                         type="password"
                         value={brevoApiKey}
                         onChange={(event) => setBrevoApiKey(event.target.value)}
                         placeholder="xkeysib-..."
+                        autoComplete="new-password"
                       />
                       <p className="text-xs text-neutral-500">
-                        This key is stored securely in the database and used for
-                        all outgoing emails.
+                        Current key:{" "}
+                        {brevoApiKeyHint ? `${brevoApiKeyHint}...` : "not set"}
+                      </p>
+                      <p className="text-xs text-neutral-500">
+                        Keys are stored encrypted and only the prefix is shown.
+                      </p>
+                    </div>
+
+                    {settingsError ? (
+                      <p className="text-sm text-red-600">{settingsError}</p>
+                    ) : null}
+                  </div>
+                ) : activeMenu === "Payments" ? (
+                  <div className="space-y-6">
+                    <div>
+                      <h2 className="text-lg font-semibold text-neutral-900">
+                        Payments
+                      </h2>
+                      <p className="text-sm text-neutral-500">
+                        Manage the payment provider keys used for checkout.
+                      </p>
+                    </div>
+
+                    <div className="space-y-1">
+                      <h3 className="text-sm font-semibold text-neutral-900">
+                        Stripe
+                      </h3>
+                      <p className="text-xs text-neutral-500">
+                        Keys are stored encrypted and only the prefix is shown.
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <label
+                          htmlFor="stripe-publishable-key"
+                          className="text-sm font-medium text-neutral-700"
+                        >
+                          Stripe publishable key
+                        </label>
+                        <KeyStatus active={Boolean(stripePublishableKeyHint)} />
+                      </div>
+                      <Input
+                        id="stripe-publishable-key"
+                        value={stripePublishableKey}
+                        onChange={(event) =>
+                          setStripePublishableKey(event.target.value)
+                        }
+                        placeholder="pk_test_..."
+                        autoComplete="off"
+                      />
+                      <p className="text-xs text-neutral-500">
+                        Current key:{" "}
+                        {stripePublishableKeyHint
+                          ? `${stripePublishableKeyHint}...`
+                          : "not set"}
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <label
+                          htmlFor="stripe-secret-key"
+                          className="text-sm font-medium text-neutral-700"
+                        >
+                          Stripe secret key
+                        </label>
+                        <KeyStatus active={Boolean(stripeSecretKeyHint)} />
+                      </div>
+                      <Input
+                        id="stripe-secret-key"
+                        type="password"
+                        value={stripeSecretKey}
+                        onChange={(event) =>
+                          setStripeSecretKey(event.target.value)
+                        }
+                        placeholder="sk_test_..."
+                        autoComplete="new-password"
+                      />
+                      <p className="text-xs text-neutral-500">
+                        Current key:{" "}
+                        {stripeSecretKeyHint
+                          ? `${stripeSecretKeyHint}...`
+                          : "not set"}
+                      </p>
+                    </div>
+
+                    <div className="space-y-1 pt-4">
+                      <h3 className="text-sm font-semibold text-neutral-900">
+                        PayPal
+                      </h3>
+                      <p className="text-xs text-neutral-500">
+                        Keys are stored encrypted and only the prefix is shown.
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <label
+                          htmlFor="paypal-client-id"
+                          className="text-sm font-medium text-neutral-700"
+                        >
+                          PayPal client ID
+                        </label>
+                        <KeyStatus active={Boolean(paypalClientIdHint)} />
+                      </div>
+                      <Input
+                        id="paypal-client-id"
+                        value={paypalClientId}
+                        onChange={(event) => setPaypalClientId(event.target.value)}
+                        placeholder="AR..."
+                        autoComplete="off"
+                      />
+                      <p className="text-xs text-neutral-500">
+                        Current key:{" "}
+                        {paypalClientIdHint ? `${paypalClientIdHint}...` : "not set"}
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <label
+                          htmlFor="paypal-client-secret"
+                          className="text-sm font-medium text-neutral-700"
+                        >
+                          PayPal client secret
+                        </label>
+                        <KeyStatus active={Boolean(paypalClientSecretHint)} />
+                      </div>
+                      <Input
+                        id="paypal-client-secret"
+                        type="password"
+                        value={paypalClientSecret}
+                        onChange={(event) =>
+                          setPaypalClientSecret(event.target.value)
+                        }
+                        placeholder="E..."
+                        autoComplete="new-password"
+                      />
+                      <p className="text-xs text-neutral-500">
+                        Current key:{" "}
+                        {paypalClientSecretHint
+                          ? `${paypalClientSecretHint}...`
+                          : "not set"}
+                      </p>
+                    </div>
+
+                    {settingsError ? (
+                      <p className="text-sm text-red-600">{settingsError}</p>
+                    ) : null}
+                  </div>
+                ) : activeMenu === "Shipping" ? (
+                  <div className="space-y-6">
+                    <div>
+                      <h2 className="text-lg font-semibold text-neutral-900">
+                        Shipping
+                      </h2>
+                      <p className="text-sm text-neutral-500">
+                        Store the Sendcloud keys to enable shipping automation later.
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <label
+                          htmlFor="sendcloud-public-key"
+                          className="text-sm font-medium text-neutral-700"
+                        >
+                          Sendcloud public key
+                        </label>
+                        <KeyStatus active={Boolean(sendcloudPublicKeyHint)} />
+                      </div>
+                      <Input
+                        id="sendcloud-public-key"
+                        value={sendcloudPublicKey}
+                        onChange={(event) =>
+                          setSendcloudPublicKey(event.target.value)
+                        }
+                        placeholder="aa..."
+                        autoComplete="off"
+                      />
+                      <p className="text-xs text-neutral-500">
+                        Current key:{" "}
+                        {sendcloudPublicKeyHint
+                          ? `${sendcloudPublicKeyHint}...`
+                          : "not set"}
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <label
+                          htmlFor="sendcloud-private-key"
+                          className="text-sm font-medium text-neutral-700"
+                        >
+                          Sendcloud private key
+                        </label>
+                        <KeyStatus active={Boolean(sendcloudPrivateKeyHint)} />
+                      </div>
+                      <Input
+                        id="sendcloud-private-key"
+                        type="password"
+                        value={sendcloudPrivateKey}
+                        onChange={(event) =>
+                          setSendcloudPrivateKey(event.target.value)
+                        }
+                        placeholder="c2..."
+                        autoComplete="new-password"
+                      />
+                      <p className="text-xs text-neutral-500">
+                        Current key:{" "}
+                        {sendcloudPrivateKeyHint
+                          ? `${sendcloudPrivateKeyHint}...`
+                          : "not set"}
+                      </p>
+                      <p className="text-xs text-neutral-500">
+                        Keys are stored encrypted and only the prefix is shown.
                       </p>
                     </div>
 

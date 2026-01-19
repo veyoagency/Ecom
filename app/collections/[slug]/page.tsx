@@ -2,6 +2,7 @@ import localFont from "next/font/local";
 import { notFound } from "next/navigation";
 
 import CollectionProductsClient from "@/app/collections/[slug]/CollectionProductsClient";
+import StorefrontCartProvider from "@/components/storefront/StorefrontCartProvider";
 import StoreFooterServer from "@/components/storefront/StoreFooterServer";
 import StoreHeaderServer from "@/components/storefront/StoreHeaderServer";
 import { Collection, Product, ProductImage } from "@/lib/models";
@@ -112,18 +113,20 @@ export default async function CollectionDetailPage({
   const maxPriceLabel = formatPriceWithSymbol(maxPriceCents);
 
   return (
-    <div
-      className={`storefront ${futura.className} min-h-screen bg-neutral-50 text-neutral-900`}
-    >
-      <StoreHeaderServer fontClassName={futura.className} />
-      <main className="bg-white py-10">
-        <CollectionProductsClient
-          title={collection.title}
-          items={items}
-          maxPriceLabel={maxPriceLabel}
-        />
-      </main>
-      <StoreFooterServer fontClassName={futura.className} />
-    </div>
+    <StorefrontCartProvider>
+      <div
+        className={`storefront ${futura.className} min-h-screen bg-neutral-50 text-neutral-900`}
+      >
+        <StoreHeaderServer fontClassName={futura.className} />
+        <main className="bg-white py-10">
+          <CollectionProductsClient
+            title={collection.title}
+            items={items}
+            maxPriceLabel={maxPriceLabel}
+          />
+        </main>
+        <StoreFooterServer fontClassName={futura.className} />
+      </div>
+    </StorefrontCartProvider>
   );
 }

@@ -1,5 +1,6 @@
 import StoreHeader from "@/components/storefront/StoreHeader";
 import { WebsiteSetting } from "@/lib/models";
+import { getPayPalClientId } from "@/lib/paypal";
 
 type StoreHeaderServerProps = {
   transparent?: boolean;
@@ -14,6 +15,7 @@ export default async function StoreHeaderServer({
 }: StoreHeaderServerProps) {
   let storeName = "New Commerce";
   let logoUrl: string | null = null;
+  let paypalClientId = "";
 
   try {
     const settings = await WebsiteSetting.findOne();
@@ -24,6 +26,7 @@ export default async function StoreHeaderServer({
       logoVariant === "transparent"
         ? settings?.logo_transparent_url ?? null
         : settings?.logo_url ?? null;
+    paypalClientId = await getPayPalClientId();
   } catch {
     // Keep fallback values on DB errors.
   }
@@ -34,6 +37,7 @@ export default async function StoreHeaderServer({
       fontClassName={fontClassName}
       storeName={storeName}
       logoUrl={logoUrl}
+      paypalClientId={paypalClientId || undefined}
     />
   );
 }

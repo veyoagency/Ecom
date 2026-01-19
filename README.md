@@ -27,6 +27,10 @@ This project uses [`next/font`](https://nextjs.org/docs/app/building-your-applic
 3) Copy `.env.example` to `.env` and set `POSTGRES`, `BETTER_AUTH_*`, the Brevo sender info, Supabase storage, and shipping.
 4) Start the app with `npm run dev`.
 
+If you already have tables and need to add PayPal fields, run `npx tsx scripts/migrate-add-paypal-columns.ts`.
+If you already have orders and need an incremental order number, run `npx tsx scripts/migrate-add-order-number.ts`.
+If you already have orders and want order tags, run `npx tsx scripts/migrate-add-order-tags.ts`.
+
 ### Admin access
 
 Better Auth handles admin sign-in at `/api/auth/*`. Set `ADMIN_EMAILS` to the email(s) allowed to access `/api/admin/*` routes.
@@ -36,13 +40,34 @@ If `ADMIN_EMAILS` is empty, any authenticated user is treated as admin (useful i
 
 ### Email (Brevo)
 
-Emails are sent via the Brevo API. Save the Brevo secret key in Settings → Emailing, and set either `BREVO_SENDER_EMAIL`/`BREVO_SENDER_NAME` or `EMAIL_FROM` (`"Name <email>"`) in your env.
+Emails are sent via the Brevo API. Save the Brevo secret key in Settings → Emailing (stored encrypted), and set either `BREVO_SENDER_EMAIL`/`BREVO_SENDER_NAME` or `EMAIL_FROM` (`"Name <email>"`) in your env.
+If you already have `website_settings`, add the Brevo settings columns with `npx tsx scripts/migrate-add-brevo-settings.ts`.
+If you previously stored Brevo in plaintext, drop the legacy column with `npx tsx scripts/migrate-drop-brevo-legacy.ts`.
 
 ### Media uploads (Supabase Storage)
 
 Product and collection media files are uploaded to Supabase Storage.
 Set `SUPABASE_URL`, `SUPABASE_S3_ENDPOINT`, `SUPABASE_S3_ACCESS_KEY_ID`, `SUPABASE_S3_SECRET_ACCESS_KEY`, and optionally `SUPABASE_STORAGE_BUCKET` (default: `product-media`).
 Use a public bucket if you want to serve images directly to storefront users.
+
+### Sendcloud (Shipping)
+
+Store Sendcloud keys in Settings → Shipping (stored encrypted) to prepare for shipping integrations.
+If you already have `website_settings`, add the Sendcloud settings columns with `npx tsx scripts/migrate-add-sendcloud-settings.ts`.
+
+### PayPal (Standard Checkout)
+
+Set `PAYPAL_ENV=live` for production (defaults to sandbox).
+Add PayPal client ID/secret from Admin → Settings → Payments, or use `NEXT_PUBLIC_PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_ID`, and `PAYPAL_CLIENT_SECRET` as a fallback.
+If you already have `website_settings`, add the PayPal settings columns with `npx tsx scripts/migrate-add-paypal-settings.ts`.
+
+### Stripe (Payment Element)
+
+Set `SETTINGS_ENCRYPTION_KEY` (32 bytes, base64 or hex) so Stripe keys can be stored encrypted in the DB.
+Add Stripe keys from Admin → Settings → Payments.
+If you already have an `orders` table, add the Stripe columns with `npx tsx scripts/migrate-add-stripe-columns.ts`.
+If you already have `website_settings`, add the Stripe settings columns with `npx tsx scripts/migrate-add-stripe-settings.ts`.
+If you want to persist Radar risk on orders, add the Stripe risk columns with `npx tsx scripts/migrate-add-stripe-risk-columns.ts`.
 
 ### API Routes
 
@@ -64,7 +89,6 @@ Admin (requires session cookie or `Authorization: Bearer <jwt>`):
 - `GET /api/admin/orders`
 - `GET /api/admin/orders/[id]`
 - `PATCH /api/admin/orders/[id]` (status updates)
-- `POST /api/admin/orders/[id]/payment-link` (send PayPal link email)
 
 ## Learn More
 

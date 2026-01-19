@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type ProductVariantOption = {
   name: string;
@@ -9,6 +9,7 @@ type ProductVariantOption = {
 
 type ProductVariantsClientProps = {
   options: ProductVariantOption[];
+  onSelectionChange?: (next: Record<string, string>) => void;
 };
 
 function isColorOption(name: string) {
@@ -56,6 +57,7 @@ function toInputName(value: string) {
 
 export default function ProductVariantsClient({
   options,
+  onSelectionChange,
 }: ProductVariantsClientProps) {
   const initialSelections = useMemo(() => {
     const entries = options
@@ -67,6 +69,10 @@ export default function ProductVariantsClient({
   const [selectedValues, setSelectedValues] = useState<Record<string, string>>(
     initialSelections,
   );
+
+  useEffect(() => {
+    onSelectionChange?.(selectedValues);
+  }, [onSelectionChange, selectedValues]);
 
   if (options.length === 0) {
     return null;

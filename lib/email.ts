@@ -1,3 +1,4 @@
+import { decryptSecret } from "@/lib/encryption";
 import { WebsiteSetting } from "@/lib/models";
 
 type EmailPayload = {
@@ -44,8 +45,11 @@ function getSender(): Sender | null {
 
 async function getApiKey() {
   const settings = await WebsiteSetting.findOne();
-  const apiKey = settings?.brevo_api_key?.trim();
-  return apiKey || null;
+  const encrypted = settings?.brevo_api_key_encrypted?.trim();
+  if (encrypted) {
+    return decryptSecret(encrypted);
+  }
+  return null;
 }
 
 export async function sendEmail(payload: EmailPayload) {

@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 
 import { Heart, Lock, Tag } from "lucide-react";
 
+import StorefrontCartProvider from "@/components/storefront/StorefrontCartProvider";
 import CollectionCard from "@/components/storefront/CollectionCard";
 import ProductCard from "@/components/storefront/ProductCard";
 import StoreFooterServer from "@/components/storefront/StoreFooterServer";
@@ -112,15 +113,16 @@ export default async function Home() {
   });
 
   return (
-    <div
-      className={`storefront ${futura.className} min-h-screen bg-neutral-50 text-neutral-900`}
-    >
-      <StoreHeaderServer
-        transparent
-        fontClassName={futura.className}
-        logoVariant="transparent"
-      />
-      <main>
+    <StorefrontCartProvider>
+      <div
+        className={`storefront ${futura.className} min-h-screen bg-neutral-50 text-neutral-900`}
+      >
+        <StoreHeaderServer
+          transparent
+          fontClassName={futura.className}
+          logoVariant="transparent"
+        />
+        <main>
         <section className="relative min-h-svh sm:min-h-[70vh]">
           <video
             src="https://lsdxrkxtirsssoebrdfh.supabase.co/storage/v1/object/public/Ecom/settings/out.mp4"
@@ -325,7 +327,8 @@ export default async function Home() {
           </div>
         </section>
         <StoreFooterServer fontClassName={futura.className} />
-      </main>
-    </div>
+        </main>
+      </div>
+    </StorefrontCartProvider>
   );
 }

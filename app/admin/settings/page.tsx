@@ -56,7 +56,13 @@ export default async function AdminSettingsPage() {
         defaultCurrency: settings?.default_currency ?? "EUR",
         logoUrl: settings?.logo_url ?? "",
         logoTransparentUrl: settings?.logo_transparent_url ?? "",
-        brevoApiKey: settings?.brevo_api_key ?? "",
+        brevoApiKeyHint: settings?.brevo_api_key_hint ?? null,
+        stripePublishableKeyHint: settings?.stripe_publishable_key_hint ?? null,
+        stripeSecretKeyHint: settings?.stripe_secret_key_hint ?? null,
+        paypalClientIdHint: settings?.paypal_client_id_hint ?? null,
+        paypalClientSecretHint: settings?.paypal_client_secret_hint ?? null,
+        sendcloudPublicKeyHint: settings?.sendcloud_public_key_hint ?? null,
+        sendcloudPrivateKeyHint: settings?.sendcloud_private_key_hint ?? null,
       }}
     />
   );

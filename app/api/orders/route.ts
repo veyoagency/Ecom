@@ -171,7 +171,7 @@ function buildOrderEmail(params: {
     )
     .join("\n");
 
-  const text = `Bonjour ${params.firstName},\n\nMerci pour votre commande ${params.publicId}.\n\nArticles:\n${lines}\n\nTotal: ${(params.totalCents / 100).toFixed(2)} EUR\n\nVous recevrez un lien PayPal par email pour proceder au paiement.\n`;
+  const text = `Bonjour ${params.firstName},\n\nMerci pour votre commande ${params.publicId}.\n\nArticles:\n${lines}\n\nTotal: ${(params.totalCents / 100).toFixed(2)} EUR\n\nNous vous tiendrons informe des prochaines etapes.\n`;
 
   const itemsHtml = params.items
     .map(
@@ -188,7 +188,7 @@ function buildOrderEmail(params: {
     <p>Articles:</p>
     <ul>${itemsHtml}</ul>
     <p>Total: <strong>${(params.totalCents / 100).toFixed(2)} EUR</strong></p>
-    <p>Vous recevrez un lien PayPal par email pour proceder au paiement.</p>
+    <p>Nous vous tiendrons informe des prochaines etapes.</p>
   `;
 
   return { text, html };
