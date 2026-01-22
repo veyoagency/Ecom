@@ -59,6 +59,35 @@ async function saveMediaFile(file: File, baseName: string, position: number) {
   );
 }
 
+function normalizeVariantValue(entry: unknown) {
+  if (typeof entry === "string") {
+    const value = entry.trim();
+    return value ? { value, imageUrl: null } : null;
+  }
+  if (!entry || typeof entry !== "object") return null;
+  const record = entry as { value?: unknown; imageUrl?: unknown; image_url?: unknown };
+  const value = record.value?.toString().trim() ?? "";
+  if (!value) return null;
+  const imageUrlRaw = record.imageUrl ?? record.image_url ?? null;
+  const imageUrl = imageUrlRaw ? imageUrlRaw.toString().trim() : "";
+  return { value, imageUrl: imageUrl || null };
+}
+
+function resolveVariantImageUrl(
+  imageUrl: string | null,
+  newImageUrlMap: Map<string, string>,
+) {
+  if (!imageUrl) return null;
+  if (imageUrl.startsWith("new:")) {
+    return newImageUrlMap.get(imageUrl) ?? null;
+  }
+  if (imageUrl.startsWith("existing:")) {
+    const trimmed = imageUrl.slice("existing:".length).trim();
+    return trimmed || null;
+  }
+  return imageUrl;
+}
+
 function parseVariantPayload(raw: string) {
   if (!raw) return [];
   const parsed = JSON.parse(raw);
@@ -66,12 +95,15 @@ function parseVariantPayload(raw: string) {
     throw new Error("Invalid variants payload.");
   }
   return parsed
-    .map((option: { name?: string; values?: string[] }) => ({
+    .map((option: { name?: string; values?: unknown[] }) => ({
       name: option?.name?.toString().trim() ?? "",
       values: Array.isArray(option?.values)
         ? option.values
-            .map((value) => value?.toString().trim() ?? "")
-            .filter(Boolean)
+            .map((value) => normalizeVariantValue(value))
+            .filter(
+              (value): value is { value: string; imageUrl: string | null } =>
+                Boolean(value),
+            )
         : [],
     }))
     .filter((option) => option.name && option.values.length > 0);
@@ -141,6 +173,7 @@ export async function PUT(
   const description = formData.get("description")?.toString().trim() ?? "";
   const priceRaw = formData.get("price")?.toString().trim() ?? "";
   const compareAtRaw = formData.get("compare_at")?.toString().trim() ?? "";
+  const weightRaw = formData.get("weight_kg")?.toString().trim() ?? "";
   const status = formData.get("status")?.toString() ?? "active";
   const inStock = formData.get("in_stock")?.toString() !== "0";
   const slugRaw = formData.get("slug")?.toString().trim() ?? "";
@@ -171,6 +204,15 @@ export async function PUT(
     }
     compareAtCents = Math.round(compareAtNumber * 100);
   }
+  let weightKg: string | null = null;
+  if (weightRaw) {
+    const normalizedWeight = weightRaw.replace(",", ".");
+    const weightNumber = Number(normalizedWeight);
+    if (!Number.isFinite(weightNumber) || weightNumber < 0) {
+      return NextResponse.json({ error: "Invalid weight." }, { status: 400 });
+    }
+    weightKg = normalizedWeight;
+  }
   const active = status === "active";
 
   const collectionIds = formData
@@ -200,7 +242,10 @@ export async function PUT(
     return NextResponse.json({ error: "Slug is required." }, { status: 400 });
   }
 
-  let variantOptions: Array<{ name: string; values: string[] }> = [];
+  let variantOptions: Array<{
+    name: string;
+    values: Array<{ value: string; imageUrl: string | null }>;
+  }> = [];
   try {
     variantOptions = parseVariantPayload(variantsRaw);
   } catch (error) {
@@ -265,6 +310,7 @@ export async function PUT(
           description_html: description,
           price_cents: priceCents,
           compare_at_cents: compareAtCents,
+          weight_kg: weightKg,
           active,
           in_stock: inStock,
         },
@@ -312,28 +358,6 @@ export async function PUT(
         transaction,
       });
 
-      if (variantOptions.length > 0) {
-        for (const [optionIndex, option] of variantOptions.entries()) {
-          const createdOption = await ProductOption.create(
-            {
-              product_id: product.id,
-              name: option.name,
-              position: optionIndex,
-            },
-            { transaction },
-          );
-
-          await ProductOptionValue.bulkCreate(
-            option.values.map((value, valueIndex) => ({
-              option_id: createdOption.id,
-              value,
-              position: valueIndex,
-            })),
-            { transaction },
-          );
-        }
-      }
-
       const keptUrls = new Set<string>();
       if (mediaOrder.length > 0) {
         for (const entry of mediaOrder) {
@@ -353,6 +377,7 @@ export async function PUT(
         transaction,
       });
 
+      const newImageUrlMap = new Map<string, string>();
       const mediaRecords: Array<{
         product_id: number;
         url: string;
@@ -379,6 +404,7 @@ export async function PUT(
               throw new Error("Invalid media order.");
             }
             const url = await saveMediaFile(file, title, mediaRecords.length);
+            newImageUrlMap.set(`new:${index}`, url);
             mediaRecords.push({
               product_id: product.id,
               url,
@@ -389,6 +415,7 @@ export async function PUT(
       } else {
         for (const [index, file] of mediaEntries.entries()) {
           const url = await saveMediaFile(file, title, index);
+          newImageUrlMap.set(`new:${index}`, url);
           mediaRecords.push({
             product_id: product.id,
             url,
@@ -399,6 +426,32 @@ export async function PUT(
 
       if (mediaRecords.length > 0) {
         await ProductImage.bulkCreate(mediaRecords, { transaction });
+      }
+
+      if (variantOptions.length > 0) {
+        for (const [optionIndex, option] of variantOptions.entries()) {
+          const createdOption = await ProductOption.create(
+            {
+              product_id: product.id,
+              name: option.name,
+              position: optionIndex,
+            },
+            { transaction },
+          );
+
+          await ProductOptionValue.bulkCreate(
+            option.values.map((value, valueIndex) => ({
+              option_id: createdOption.id,
+              value: value.value,
+              image_url: resolveVariantImageUrl(
+                value.imageUrl,
+                newImageUrlMap,
+              ),
+              position: valueIndex,
+            })),
+            { transaction },
+          );
+        }
       }
 
       return product;

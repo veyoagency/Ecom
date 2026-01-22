@@ -29,7 +29,14 @@ import { Badge } from "@/components/ui/badge";
 import { auth } from "@/lib/auth";
 import { isAdminEmail } from "@/lib/admin-config";
 import { DEFAULT_PAGE_SIZE } from "@/lib/constants";
-import { Op, Order, OrderItem, OrderTag, OrderTagAssignment } from "@/lib/models";
+import {
+  Customer,
+  Op,
+  Order,
+  OrderItem,
+  OrderTag,
+  OrderTagAssignment,
+} from "@/lib/models";
 import { Filter, Search } from "lucide-react";
 
 export const metadata = {
@@ -98,14 +105,35 @@ function formatRelativeDate(value: Date) {
   }).format(date);
 }
 
-function formatCustomerName(firstName: string, lastName: string, email: string) {
-  const name = `${firstName ?? ""} ${lastName ?? ""}`.trim();
-  return name || email;
+function formatCustomerName(customer?: {
+  first_name?: string | null;
+  last_name?: string | null;
+  email?: string | null;
+}) {
+  const name = `${customer?.first_name ?? ""} ${customer?.last_name ?? ""}`.trim();
+  return name || customer?.email || "Client";
 }
 
-function getPaymentStatus(status: string) {
+function getPaymentStatus(status: string, paymentStatus?: string | null) {
+  const normalized = paymentStatus ?? "";
+  if (normalized === "refunded") {
+    return { label: "Refunded", variant: "outline" as const, dot: "bg-rose-500" };
+  }
+  if (normalized === "partially_refunded") {
+    return {
+      label: "Partially refunded",
+      variant: "outline" as const,
+      dot: "bg-amber-500",
+    };
+  }
+  if (normalized === "paid") {
+    return { label: "Paid", variant: "muted" as const, dot: "bg-emerald-500" };
+  }
+  if (normalized === "unpaid") {
+    return { label: "Unpaid", variant: "outline" as const, dot: "bg-amber-500" };
+  }
   if (status === "paid" || status === "fulfilled") {
-    return { label: "Paid", variant: "muted" as const, dot: "bg-neutral-400" };
+    return { label: "Paid", variant: "muted" as const, dot: "bg-emerald-500" };
   }
   return { label: "Unpaid", variant: "outline" as const, dot: "bg-amber-500" };
 }
@@ -209,12 +237,14 @@ export default async function AdminOrdersPage({
       [Op.in]: ["pending_payment", "payment_link_sent", "paid"],
     };
   } else if (statusParam === "archived") {
-    where.status = { [Op.in]: ["fulfilled", "cancelled"] };
+    where.delivery_status = "Delivered";
   }
   if (queryParam) {
     where[Op.or] = [
       { public_id: { [Op.iLike]: `%${queryParam}%` } },
-      { email: { [Op.iLike]: `%${queryParam}%` } },
+      { "$customer.email$": { [Op.iLike]: `%${queryParam}%` } },
+      { "$customer.first_name$": { [Op.iLike]: `%${queryParam}%` } },
+      { "$customer.last_name$": { [Op.iLike]: `%${queryParam}%` } },
     ];
   }
 
@@ -238,28 +268,45 @@ export default async function AdminOrdersPage({
         "public_id",
         "order_number",
         "status",
-        "email",
-        "first_name",
-        "last_name",
+        "payment_status",
         "total_cents",
+        "delivery_status",
+        "shipping_option_title",
         "created_at",
         [Sequelize.fn("COUNT", Sequelize.col("items.id")), "items_count"],
       ],
       include: [
+        {
+          model: Customer,
+          as: "customer",
+          attributes: ["first_name", "last_name", "email"],
+        },
         {
           model: OrderItem,
           as: "items",
           attributes: [],
         },
       ],
-      group: ["Order.id"],
+      group: ["Order.id", "customer.id"],
       where,
       order: [[Sequelize.col(orderColumn), orderKey]],
       limit,
       offset,
       subQuery: false,
     }),
-    Order.count({ where }),
+    Order.count({
+      where,
+      include: [
+        {
+          model: Customer,
+          as: "customer",
+          attributes: [],
+        },
+      ],
+      distinct: true,
+      col: "id",
+      subQuery: false,
+    }),
   ]);
 
   const orderIds = orders
@@ -297,15 +344,26 @@ export default async function AdminOrdersPage({
 
   const rows = orders.map((order) => {
     const data = order.toJSON() as Record<string, unknown>;
+    const customer = (data.customer as Record<string, unknown>) ?? null;
     return {
       id: order.id,
       publicId: data.public_id as string,
       orderNumber: data.order_number ? Number(data.order_number) : null,
       status: data.status as string,
-      email: data.email as string,
-      firstName: (data.first_name as string) ?? "",
-      lastName: (data.last_name as string) ?? "",
+      paymentStatus: (data.payment_status as string | null) ?? null,
+      customer: customer
+        ? {
+            first_name: customer.first_name as string | null,
+            last_name: customer.last_name as string | null,
+            email: customer.email as string | null,
+          }
+        : null,
       totalCents: Number(data.total_cents ?? 0),
+      deliveryStatus: (data.delivery_status as string | null) ?? null,
+      shippingTitle:
+        typeof data.shipping_option_title === "string"
+          ? data.shipping_option_title
+          : null,
       createdAt: data.created_at as Date,
       itemsCount: Number(data.items_count ?? 0),
       tags: tagsByOrderId.get(String(order.id)) ?? [],
@@ -382,7 +440,7 @@ export default async function AdminOrdersPage({
               </form>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm">
+                  <Button type="button" variant="outline" size="sm">
                     <Filter className="mr-2 h-4 w-4" />
                     Filter
                   </Button>
@@ -457,7 +515,7 @@ export default async function AdminOrdersPage({
                 </TableRow>
               ) : (
                 rows.map((row) => {
-                  const payment = getPaymentStatus(row.status);
+                  const payment = getPaymentStatus(row.status, row.paymentStatus);
                   const fulfillment = getFulfillmentStatus(row.status);
                   return (
                     <TableRow key={row.id}>
@@ -477,11 +535,7 @@ export default async function AdminOrdersPage({
                       </TableCell>
                       <TableCell>{formatRelativeDate(row.createdAt)}</TableCell>
                       <TableCell>
-                        {formatCustomerName(
-                          row.firstName,
-                          row.lastName,
-                          row.email,
-                        )}
+                        {formatCustomerName(row.customer ?? undefined)}
                       </TableCell>
                       <TableCell>{formatCurrency(row.totalCents)}</TableCell>
                       <TableCell>
@@ -503,8 +557,24 @@ export default async function AdminOrdersPage({
                       <TableCell>
                         {row.itemsCount} {row.itemsCount === 1 ? "item" : "items"}
                       </TableCell>
-                      <TableCell className="text-neutral-500">—</TableCell>
-                      <TableCell className="text-neutral-500">—</TableCell>
+                      <TableCell className="text-neutral-500">
+                        {row.deliveryStatus ? (
+                          <Badge variant="outline" className="text-xs">
+                            {row.deliveryStatus}
+                          </Badge>
+                        ) : (
+                          "—"
+                        )}
+                      </TableCell>
+                      <TableCell className="text-neutral-500">
+                        {row.shippingTitle?.trim() ? (
+                          <Badge variant="outline" className="text-xs">
+                            {row.shippingTitle.trim()}
+                          </Badge>
+                        ) : (
+                          "—"
+                        )}
+                      </TableCell>
                       <TableCell>
                         {row.tags.length > 0 ? (
                           <div className="flex flex-wrap gap-1">

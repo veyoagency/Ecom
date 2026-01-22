@@ -76,6 +76,35 @@ async function saveMediaFile(file: File, baseName: string, position: number) {
   );
 }
 
+function normalizeVariantValue(entry: unknown) {
+  if (typeof entry === "string") {
+    const value = entry.trim();
+    return value ? { value, imageUrl: null } : null;
+  }
+  if (!entry || typeof entry !== "object") return null;
+  const record = entry as { value?: unknown; imageUrl?: unknown; image_url?: unknown };
+  const value = record.value?.toString().trim() ?? "";
+  if (!value) return null;
+  const imageUrlRaw = record.imageUrl ?? record.image_url ?? null;
+  const imageUrl = imageUrlRaw ? imageUrlRaw.toString().trim() : "";
+  return { value, imageUrl: imageUrl || null };
+}
+
+function resolveVariantImageUrl(
+  imageUrl: string | null,
+  newImageUrlMap: Map<string, string>,
+) {
+  if (!imageUrl) return null;
+  if (imageUrl.startsWith("new:")) {
+    return newImageUrlMap.get(imageUrl) ?? null;
+  }
+  if (imageUrl.startsWith("existing:")) {
+    const trimmed = imageUrl.slice("existing:".length).trim();
+    return trimmed || null;
+  }
+  return imageUrl;
+}
+
 export async function POST(request: NextRequest) {
   const admin = await requireAdmin(request);
   if (admin.error) {
@@ -87,6 +116,7 @@ export async function POST(request: NextRequest) {
   const description = formData.get("description")?.toString().trim() ?? "";
   const priceRaw = formData.get("price")?.toString().trim() ?? "";
   const compareAtRaw = formData.get("compare_at")?.toString().trim() ?? "";
+  const weightRaw = formData.get("weight_kg")?.toString().trim() ?? "";
   const status = formData.get("status")?.toString() ?? "active";
   const inStock = formData.get("in_stock")?.toString() !== "0";
   const variantsRaw = formData.get("variants")?.toString() ?? "";
@@ -116,6 +146,15 @@ export async function POST(request: NextRequest) {
     }
     compareAtCents = Math.round(compareAtNumber * 100);
   }
+  let weightKg: string | null = null;
+  if (weightRaw) {
+    const normalizedWeight = weightRaw.replace(",", ".");
+    const weightNumber = Number(normalizedWeight);
+    if (!Number.isFinite(weightNumber) || weightNumber < 0) {
+      return NextResponse.json({ error: "Invalid weight." }, { status: 400 });
+    }
+    weightKg = normalizedWeight;
+  }
   const active = status === "active";
 
   const collectionIds = formData
@@ -123,7 +162,10 @@ export async function POST(request: NextRequest) {
     .map((value) => Number(value))
     .filter((value) => Number.isFinite(value));
 
-  let variantOptions: Array<{ name: string; values: string[] }> = [];
+  let variantOptions: Array<{
+    name: string;
+    values: Array<{ value: string; imageUrl: string | null }>;
+  }> = [];
   if (variantsRaw) {
     try {
       const parsed = JSON.parse(variantsRaw);
@@ -135,8 +177,11 @@ export async function POST(request: NextRequest) {
           name: option?.name?.toString().trim() ?? "",
           values: Array.isArray(option?.values)
             ? option.values
-                .map((value) => value?.toString().trim() ?? "")
-                .filter(Boolean)
+                .map((value) => normalizeVariantValue(value))
+                .filter(
+                  (value): value is { value: string; imageUrl: string | null } =>
+                    Boolean(value),
+                )
             : [],
         }))
         .filter((option) => option.name && option.values.length > 0);
@@ -209,6 +254,7 @@ export async function POST(request: NextRequest) {
           description_html: description,
           price_cents: priceCents,
           compare_at_cents: compareAtCents,
+          weight_kg: weightKg,
           active,
           in_stock: inStock,
         },
@@ -235,6 +281,7 @@ export async function POST(request: NextRequest) {
       }
 
       const mediaRecords = [];
+      const newImageUrlMap = new Map<string, string>();
       if (mediaOrder.length > 0) {
         for (const entry of mediaOrder) {
           if (!entry.startsWith("new:")) continue;
@@ -244,6 +291,7 @@ export async function POST(request: NextRequest) {
             throw new Error("Invalid media order.");
           }
           const url = await saveMediaFile(file, created.slug, mediaRecords.length);
+          newImageUrlMap.set(`new:${index}`, url);
           mediaRecords.push({
             product_id: created.id,
             url,
@@ -253,6 +301,7 @@ export async function POST(request: NextRequest) {
       } else {
         for (const [index, file] of mediaEntries.entries()) {
           const url = await saveMediaFile(file, created.slug, index);
+          newImageUrlMap.set(`new:${index}`, url);
           mediaRecords.push({
             product_id: created.id,
             url,
@@ -279,7 +328,8 @@ export async function POST(request: NextRequest) {
           await ProductOptionValue.bulkCreate(
             option.values.map((value, valueIndex) => ({
               option_id: createdOption.id,
-              value,
+              value: value.value,
+              image_url: resolveVariantImageUrl(value.imageUrl, newImageUrlMap),
               position: valueIndex,
             })),
             { transaction },

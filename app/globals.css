@@ -137,6 +137,11 @@
   border-radius: 0 !important;
 }
 
+.storefront .cart-icon-round,
+.storefront .cart-badge-round {
+  border-radius: 9999px !important;
+}
+
 .storefront {
   color: #000000;
 }

@@ -84,7 +84,7 @@ export async function POST(
           {
             model: ProductOptionValue,
             as: "values",
-            attributes: ["value", "position"],
+            attributes: ["value", "position", "image_url"],
             required: false,
           },
         ],
@@ -101,6 +101,7 @@ export async function POST(
     description_html: string | null;
     price_cents: number;
     compare_at_cents: number | null;
+    weight_kg?: string | null;
     active: boolean;
     in_stock?: boolean;
     images?: Array<{ url: string; position: number | null }>;
@@ -108,7 +109,11 @@ export async function POST(
     options?: Array<{
       name: string;
       position: number | null;
-      values?: Array<{ value: string; position: number | null }>;
+      values?: Array<{
+        value: string;
+        position: number | null;
+        image_url?: string | null;
+      }>;
     }>;
   };
 
@@ -128,6 +133,7 @@ export async function POST(
           description_html: productJson.description_html,
           price_cents: productJson.price_cents,
           compare_at_cents: productJson.compare_at_cents,
+          weight_kg: productJson.weight_kg ?? null,
           active: false,
           in_stock: productJson.in_stock ?? true,
         },
@@ -174,6 +180,7 @@ export async function POST(
             values.map((value, valueIndex) => ({
               option_id: createdOption.id,
               value: value.value,
+              image_url: value.image_url ?? null,
               position: value.position ?? valueIndex,
             })),
             { transaction },

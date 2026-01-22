@@ -1,9 +1,11 @@
 import localFont from "next/font/local";
 
 import StorefrontCartProvider from "@/components/storefront/StorefrontCartProvider";
+import { decryptSecret } from "@/lib/encryption";
 import { WebsiteSetting } from "@/lib/models";
 import { getStripePublishableKey } from "@/lib/stripe";
 import CheckoutClient from "@/app/checkout/CheckoutClient";
+import { DEFAULT_COUNTRY } from "@/lib/constants";
 
 const futura = localFont({
   src: [
@@ -37,6 +39,27 @@ export default async function CheckoutPage() {
   } catch {
     stripePublishableKey = "";
   }
+  let googleMapsApiKey = "";
+  if (settings?.google_maps_api_key_encrypted) {
+    try {
+      googleMapsApiKey = decryptSecret(settings.google_maps_api_key_encrypted);
+    } catch {
+      googleMapsApiKey = "";
+    }
+  }
+  let googleMapsCountryCodes: string[] = [];
+  if (settings?.google_maps_country_codes) {
+    try {
+      const parsed = JSON.parse(settings.google_maps_country_codes);
+      if (Array.isArray(parsed)) {
+        googleMapsCountryCodes = parsed
+          .map((code) => code?.toString().trim().toUpperCase())
+          .filter((code) => code);
+      }
+    } catch {
+      googleMapsCountryCodes = [];
+    }
+  }
 
   return (
     <StorefrontCartProvider>
@@ -46,6 +69,10 @@ export default async function CheckoutPage() {
         logoUrl={logoUrl}
         shippingCents={Number.isFinite(shippingCents) ? shippingCents : 0}
         stripePublishableKey={stripePublishableKey || null}
+        googleMapsApiKey={googleMapsApiKey || null}
+        checkoutCountryCodes={
+          googleMapsCountryCodes.length ? googleMapsCountryCodes : [DEFAULT_COUNTRY]
+        }
       />
     </StorefrontCartProvider>
   );

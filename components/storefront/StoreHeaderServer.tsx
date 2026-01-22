@@ -15,6 +15,7 @@ export default async function StoreHeaderServer({
 }: StoreHeaderServerProps) {
   let storeName = "New Commerce";
   let logoUrl: string | null = null;
+  let logoTransparentUrl: string | null = null;
   let paypalClientId = "";
 
   try {
@@ -22,10 +23,8 @@ export default async function StoreHeaderServer({
     if (settings?.store_name?.trim()) {
       storeName = settings.store_name.trim();
     }
-    logoUrl =
-      logoVariant === "transparent"
-        ? settings?.logo_transparent_url ?? null
-        : settings?.logo_url ?? null;
+    logoUrl = settings?.logo_url ?? null;
+    logoTransparentUrl = settings?.logo_transparent_url ?? null;
     paypalClientId = await getPayPalClientId();
   } catch {
     // Keep fallback values on DB errors.
@@ -36,7 +35,9 @@ export default async function StoreHeaderServer({
       transparent={transparent}
       fontClassName={fontClassName}
       storeName={storeName}
-      logoUrl={logoUrl}
+      logoUrl={logoUrl ?? logoTransparentUrl ?? null}
+      logoTransparentUrl={logoTransparentUrl}
+      logoVariant={logoVariant}
       paypalClientId={paypalClientId || undefined}
     />
   );

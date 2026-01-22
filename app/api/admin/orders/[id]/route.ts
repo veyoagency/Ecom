@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { requireAdmin } from "@/lib/admin";
 import { ORDER_STATUSES, type OrderStatus } from "@/lib/constants";
-import { Order, OrderItem } from "@/lib/models";
+import { Customer, Order, OrderItem } from "@/lib/models";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -31,6 +31,22 @@ export async function GET(
 
   const order = await Order.findByPk(id, {
     include: [
+      {
+        model: Customer,
+        as: "customer",
+        attributes: [
+          "id",
+          "first_name",
+          "last_name",
+          "email",
+          "phone",
+          "address1",
+          "address2",
+          "postal_code",
+          "city",
+          "country",
+        ],
+      },
       {
         model: OrderItem,
         as: "items",

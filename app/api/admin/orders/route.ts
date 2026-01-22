@@ -9,7 +9,7 @@ import {
 } from "@/lib/constants";
 import { Sequelize } from "sequelize";
 
-import { Order, OrderItem } from "@/lib/models";
+import { Customer, Order, OrderItem } from "@/lib/models";
 import { parseInteger } from "@/lib/validators";
 
 export const runtime = "nodejs";
@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
       "id",
       "public_id",
       "status",
-      "email",
+      "payment_status",
       "total_cents",
       "created_at",
       "updated_at",
@@ -51,12 +51,17 @@ export async function GET(request: NextRequest) {
     ],
     include: [
       {
+        model: Customer,
+        as: "customer",
+        attributes: ["first_name", "last_name", "email"],
+      },
+      {
         model: OrderItem,
         as: "items",
         attributes: [],
       },
     ],
-    group: ["Order.id"],
+    group: ["Order.id", "customer.id"],
     order: [["created_at", "DESC"]],
     limit,
     offset,

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { Order, OrderItem } from "@/lib/models";
+import { Customer, Order, OrderItem } from "@/lib/models";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,6 +25,22 @@ export async function GET(
       "updated_at",
     ],
     include: [
+      {
+        model: Customer,
+        as: "customer",
+        attributes: [
+          "id",
+          "first_name",
+          "last_name",
+          "email",
+          "phone",
+          "address1",
+          "address2",
+          "postal_code",
+          "city",
+          "country",
+        ],
+      },
       {
         model: OrderItem,
         as: "items",

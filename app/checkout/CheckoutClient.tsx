@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -21,6 +21,14 @@ import {
 } from "@stripe/react-stripe-js";
 
 import { useCart } from "@/components/storefront/cart-context";
+import {
+  Drawer,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerTrigger,
+} from "@/components/ui/drawer";
+import { DEFAULT_COUNTRY } from "@/lib/constants";
 
 type CheckoutClientProps = {
   fontClassName: string;
@@ -28,6 +36,8 @@ type CheckoutClientProps = {
   logoUrl?: string | null;
   shippingCents: number;
   stripePublishableKey?: string | null;
+  googleMapsApiKey?: string | null;
+  checkoutCountryCodes?: string[] | null;
 };
 
 type CustomerFormState = {
@@ -45,12 +55,113 @@ type ShippingFormState = {
   country: string;
 };
 
+type ShippingOptionItem = {
+  id: number;
+  carrier: string;
+  title: string;
+  description: string | null;
+  price: string;
+  min_order_total: string | null;
+  max_order_total: string | null;
+  shipping_type?: string | null;
+};
+
+type ServicePoint = {
+  id: number;
+  name: string;
+  street: string;
+  house_number: string;
+  postal_code: string;
+  city: string;
+  distance?: number | null;
+  formatted_opening_times?: Record<string, string[]> | null;
+};
+
 function formatPrice(cents: number) {
   const value = new Intl.NumberFormat("fr-FR", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(cents / 100);
   return `${value.replace(/\u00a0|\u202f/g, " ")} €`;
+}
+
+type AddressParts = {
+  address1?: string;
+  postalCode?: string;
+  city?: string;
+};
+
+function getCountryLabel(code: string, locale = "fr") {
+  try {
+    const display = new Intl.DisplayNames([locale], { type: "region" });
+    return display.of(code) ?? code;
+  } catch {
+    return code;
+  }
+}
+
+function extractAddressParts(components: Array<any>): AddressParts {
+  let streetNumber = "";
+  let route = "";
+  let postalCode = "";
+  let locality = "";
+  let postalTown = "";
+  let sublocality = "";
+  let adminArea2 = "";
+  let adminArea1 = "";
+
+  components.forEach((component) => {
+    const types = Array.isArray(component?.types) ? component.types : [];
+    if (types.includes("street_number")) {
+      streetNumber = component.long_name || component.short_name || "";
+    }
+    if (types.includes("route")) {
+      route = component.long_name || component.short_name || "";
+    }
+    if (types.includes("postal_code")) {
+      postalCode = component.long_name || component.short_name || "";
+    }
+    if (types.includes("locality")) {
+      locality = component.long_name || component.short_name || "";
+    }
+    if (types.includes("postal_town")) {
+      postalTown = component.long_name || component.short_name || "";
+    }
+    if (types.includes("sublocality_level_1")) {
+      sublocality = component.long_name || component.short_name || "";
+    }
+    if (types.includes("administrative_area_level_2")) {
+      adminArea2 = component.long_name || component.short_name || "";
+    }
+    if (types.includes("administrative_area_level_1")) {
+      adminArea1 = component.long_name || component.short_name || "";
+    }
+  });
+
+  const address1 = [streetNumber, route].filter(Boolean).join(" ").trim();
+  const city = locality || postalTown || sublocality || adminArea2 || adminArea1;
+
+  return {
+    address1: address1 || undefined,
+    postalCode: postalCode || undefined,
+    city: city || undefined,
+  };
+}
+
+function formatDistance(distance?: number | null) {
+  if (typeof distance !== "number" || !Number.isFinite(distance)) return null;
+  if (distance >= 1000) {
+    return `${(distance / 1000).toFixed(1).replace(".", ",")} km`;
+  }
+  return `${Math.round(distance)} m`;
+}
+
+function parsePriceToCents(value: string | null) {
+  if (!value) return null;
+  const normalized = value.replace(",", ".");
+  const amount = Number.parseFloat(normalized);
+  if (!Number.isFinite(amount) || amount < 0) return null;
+  return Math.round(amount * 100);
 }
 
 function calculateDiscountCents(baseCents: number, discount: {
@@ -74,7 +185,9 @@ function StripePayButton({
   shipping,
   itemsPayload,
   discountCode,
+  shippingOptionId,
   paymentIntentId,
+  servicePoint,
   onPaid,
   disabled,
 }: {
@@ -82,7 +195,9 @@ function StripePayButton({
   shipping: ShippingFormState;
   itemsPayload: Array<{ product_id: number; qty: number }>;
   discountCode?: string | null;
+  shippingOptionId?: number | null;
   paymentIntentId?: string | null;
+  servicePoint: ServicePoint | null;
   onPaid: (orderPublicId: string) => void;
   disabled: boolean;
 }) {
@@ -138,7 +253,7 @@ function StripePayButton({
               line2: shipping.address2 || null,
               postal_code: shipping.postalCode || null,
               city: shipping.city || null,
-              country: shipping.country || "FR",
+              country: shipping.country || DEFAULT_COUNTRY,
             },
           },
           shipping: {
@@ -149,7 +264,7 @@ function StripePayButton({
               line2: shipping.address2 || null,
               postal_code: shipping.postalCode || null,
               city: shipping.city || null,
-              country: shipping.country || "FR",
+              country: shipping.country || DEFAULT_COUNTRY,
             },
           },
         }),
@@ -179,19 +294,8 @@ function StripePayButton({
               line2: shipping.address2 || undefined,
               postal_code: shipping.postalCode || undefined,
               city: shipping.city || undefined,
-              country: shipping.country || "FR",
+              country: shipping.country || DEFAULT_COUNTRY,
             },
-          },
-        },
-        shipping: {
-          name: `${customer.firstName} ${customer.lastName}`.trim(),
-          phone: customer.phone || undefined,
-          address: {
-            line1: shipping.address1 || undefined,
-            line2: shipping.address2 || undefined,
-            postal_code: shipping.postalCode || undefined,
-            city: shipping.city || undefined,
-            country: shipping.country || "FR",
           },
         },
       },
@@ -217,6 +321,7 @@ function StripePayButton({
         paymentIntentId: paymentIntent.id,
         items: itemsPayload,
         discountCode: discountCode ?? null,
+        shippingOptionId: shippingOptionId ?? null,
         customer: {
           first_name: customer.firstName,
           last_name: customer.lastName,
@@ -228,8 +333,19 @@ function StripePayButton({
           address2: shipping.address2 || null,
           postal_code: shipping.postalCode,
           city: shipping.city,
-          country: shipping.country || "FR",
+          country: shipping.country || DEFAULT_COUNTRY,
         },
+        servicePoint: servicePoint
+          ? {
+              id: servicePoint.id,
+              name: servicePoint.name,
+              street: servicePoint.street,
+              house_number: servicePoint.house_number,
+              postal_code: servicePoint.postal_code,
+              city: servicePoint.city,
+              distance: servicePoint.distance ?? null,
+            }
+          : null,
       }),
     });
 
@@ -274,8 +390,17 @@ export default function CheckoutClient({
   logoUrl,
   shippingCents,
   stripePublishableKey,
+  googleMapsApiKey,
+  checkoutCountryCodes,
 }: CheckoutClientProps) {
   const router = useRouter();
+  const normalizedCountryCodes = useMemo(() => {
+    if (!checkoutCountryCodes?.length) return [DEFAULT_COUNTRY];
+    const normalized = checkoutCountryCodes
+      .map((code) => code?.toString().trim().toUpperCase())
+      .filter((code) => code);
+    return Array.from(new Set(normalized.length ? normalized : [DEFAULT_COUNTRY]));
+  }, [checkoutCountryCodes]);
   const {
     items,
     totalCents,
@@ -300,8 +425,31 @@ export default function CheckoutClient({
     address2: "",
     postalCode: "",
     city: "",
-    country: "FR",
+    country: normalizedCountryCodes[0] ?? DEFAULT_COUNTRY,
   });
+  const countryRestriction = useMemo(() => {
+    const current = shipping.country || normalizedCountryCodes[0] || DEFAULT_COUNTRY;
+    return current.toLowerCase();
+  }, [normalizedCountryCodes, shipping.country]);
+  const [shippingOptions, setShippingOptions] = useState<ShippingOptionItem[]>([]);
+  const [shippingOptionsLoading, setShippingOptionsLoading] = useState(false);
+  const [shippingOptionsLoaded, setShippingOptionsLoaded] = useState(false);
+  const [shippingOptionsError, setShippingOptionsError] = useState<string | null>(
+    null,
+  );
+  const [selectedShippingOptionId, setSelectedShippingOptionId] = useState<
+    number | null
+  >(null);
+  const [servicePoints, setServicePoints] = useState<ServicePoint[]>([]);
+  const [servicePointsLoading, setServicePointsLoading] = useState(false);
+  const [servicePointsError, setServicePointsError] = useState<string | null>(null);
+  const [selectedServicePointId, setSelectedServicePointId] = useState<
+    number | null
+  >(null);
+  const [isServicePointDrawerOpen, setIsServicePointDrawerOpen] = useState(false);
+  const addressInputRef = useRef<HTMLInputElement | null>(null);
+  const autocompleteRef = useRef<any>(null);
+  const autocompleteListenerRef = useRef<{ remove: () => void } | null>(null);
 
   const [discountInput, setDiscountInput] = useState("");
   const [discountError, setDiscountError] = useState<string | null>(null);
@@ -322,22 +470,303 @@ export default function CheckoutClient({
     [items],
   );
 
+  const hasFullAddress = Boolean(
+    shipping.address1.trim() && shipping.postalCode.trim() && shipping.city.trim(),
+  );
+
   const subtotalCents = totalCents;
+
+  const eligibleShippingOptions = useMemo(() => {
+    if (!shippingOptions.length) return [];
+    return shippingOptions.filter((option) => {
+      const minCents = parsePriceToCents(option.min_order_total);
+      const maxCents = parsePriceToCents(option.max_order_total);
+      if (minCents !== null && subtotalCents < minCents) {
+        return false;
+      }
+      if (maxCents !== null && subtotalCents > maxCents) {
+        return false;
+      }
+      return true;
+    });
+  }, [shippingOptions, subtotalCents]);
+
+  const selectedShippingOption = useMemo(() => {
+    if (!selectedShippingOptionId) return null;
+    return (
+      eligibleShippingOptions.find(
+        (option) => option.id === selectedShippingOptionId,
+      ) ?? null
+    );
+  }, [eligibleShippingOptions, selectedShippingOptionId]);
+
+  const isServicePointOption =
+    selectedShippingOption?.shipping_type === "service_points";
+  const selectedServicePoint = useMemo(() => {
+    if (!selectedServicePointId) return null;
+    return (
+      servicePoints.find((point) => point.id === selectedServicePointId) ?? null
+    );
+  }, [servicePoints, selectedServicePointId]);
+  const requiresServicePointSelection =
+    isServicePointOption && hasFullAddress && !selectedServicePointId;
+
+  const defaultShippingCents = shippingCents;
+  const selectedShippingPriceCents = selectedShippingOption
+    ? parsePriceToCents(selectedShippingOption.price)
+    : null;
+
+  const requiresShippingOption =
+    hasFullAddress && shippingOptionsLoaded && shippingOptions.length > 0;
+  const selectedShippingCents =
+    selectedShippingPriceCents !== null
+      ? selectedShippingPriceCents
+      : requiresShippingOption
+        ? 0
+        : defaultShippingCents;
   const discountCents = useMemo(
-    () => calculateDiscountCents(subtotalCents + shippingCents, discount),
-    [discount, shippingCents, subtotalCents],
+    () => calculateDiscountCents(subtotalCents + selectedShippingCents, discount),
+    [discount, selectedShippingCents, subtotalCents],
   );
   const computedTotalCents = Math.max(
-    subtotalCents + shippingCents - discountCents,
+    subtotalCents + selectedShippingCents - discountCents,
     0,
   );
   const displayTotalCents = serverTotalCents ?? computedTotalCents;
+  const totalItemCount = useMemo(
+    () => items.reduce((total, item) => total + item.quantity, 0),
+    [items],
+  );
 
   const hasStripeKey = Boolean(normalizedStripeKey);
+  const googlePlacesKey = googleMapsApiKey?.trim() ?? "";
+
+  useEffect(() => {
+    if (!normalizedCountryCodes.length) return;
+    if (normalizedCountryCodes.includes(shipping.country)) return;
+    setShipping((prev) => ({
+      ...prev,
+      country: normalizedCountryCodes[0] ?? DEFAULT_COUNTRY,
+    }));
+  }, [normalizedCountryCodes, shipping.country]);
+
+  useEffect(() => {
+    if (!googlePlacesKey || !addressInputRef.current) {
+      return;
+    }
+
+    const setupAutocomplete = () => {
+      const googleMaps = (window as any).google;
+      if (!googleMaps?.maps?.places || !addressInputRef.current) {
+        return;
+      }
+
+      autocompleteRef.current = new googleMaps.maps.places.Autocomplete(
+        addressInputRef.current,
+        {
+          types: ["address"],
+          fields: ["address_components"],
+          componentRestrictions: { country: countryRestriction },
+        },
+      );
+
+      autocompleteListenerRef.current = autocompleteRef.current.addListener(
+        "place_changed",
+        () => {
+          const place = autocompleteRef.current?.getPlace?.();
+          const parts = extractAddressParts(place?.address_components ?? []);
+          setShipping((prev) => ({
+            ...prev,
+            address1: parts.address1 ?? prev.address1,
+            postalCode: parts.postalCode ?? prev.postalCode,
+            city: parts.city ?? prev.city,
+          }));
+        },
+      );
+    };
+
+    const existingScript = document.querySelector(
+      'script[data-google-places="true"]',
+    ) as HTMLScriptElement | null;
+
+    if (existingScript) {
+      if ((window as any).google?.maps?.places) {
+        setupAutocomplete();
+      } else {
+        existingScript.addEventListener("load", setupAutocomplete, { once: true });
+      }
+      return () => {
+        autocompleteListenerRef.current?.remove();
+        autocompleteListenerRef.current = null;
+        existingScript.removeEventListener("load", setupAutocomplete);
+      };
+    }
+
+    const script = document.createElement("script");
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${googlePlacesKey}&libraries=places&v=weekly`;
+    script.async = true;
+    script.defer = true;
+    script.dataset.googlePlaces = "true";
+    script.addEventListener("load", setupAutocomplete);
+    document.head.appendChild(script);
+
+    return () => {
+      autocompleteListenerRef.current?.remove();
+      autocompleteListenerRef.current = null;
+      script.removeEventListener("load", setupAutocomplete);
+    };
+  }, [googlePlacesKey, countryRestriction]);
+
+  useEffect(() => {
+    if (!autocompleteRef.current) return;
+    autocompleteRef.current.setComponentRestrictions({
+      country: countryRestriction,
+    });
+  }, [countryRestriction]);
+
+  const loadShippingOptions = async () => {
+    if (shippingOptionsLoading) return;
+    setShippingOptionsLoading(true);
+    setShippingOptionsError(null);
+    try {
+      const response = await fetch("/api/shipping/options");
+      const data = (await response.json().catch(() => null)) as
+        | { options?: ShippingOptionItem[]; error?: string }
+        | null;
+      if (!response.ok) {
+        setShippingOptionsError(data?.error || "Impossible de charger la livraison.");
+        return;
+      }
+      setShippingOptions(Array.isArray(data?.options) ? data.options : []);
+    } catch {
+      setShippingOptionsError("Impossible de charger la livraison.");
+    } finally {
+      setShippingOptionsLoaded(true);
+      setShippingOptionsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (
+      !itemsPayload.length ||
+      !hasFullAddress ||
+      shippingOptionsLoaded ||
+      shippingOptionsLoading
+    ) {
+      return;
+    }
+    void loadShippingOptions();
+  }, [itemsPayload.length, hasFullAddress, shippingOptionsLoaded, shippingOptionsLoading]);
+
+  useEffect(() => {
+    if (!eligibleShippingOptions.length) {
+      setSelectedShippingOptionId(null);
+      return;
+    }
+    const isSelectedStillValid = selectedShippingOptionId
+      ? eligibleShippingOptions.some(
+          (option) => option.id === selectedShippingOptionId,
+        )
+      : false;
+    if (!isSelectedStillValid) {
+      setSelectedShippingOptionId(eligibleShippingOptions[0]?.id ?? null);
+    }
+  }, [eligibleShippingOptions, selectedShippingOptionId]);
+
+  useEffect(() => {
+    if (!isServicePointOption) {
+      setServicePoints([]);
+      setSelectedServicePointId(null);
+      setServicePointsError(null);
+      setServicePointsLoading(false);
+      setIsServicePointDrawerOpen(false);
+      return;
+    }
+    if (!hasFullAddress) {
+      setServicePoints([]);
+      setSelectedServicePointId(null);
+      setServicePointsError(null);
+      setServicePointsLoading(false);
+      setIsServicePointDrawerOpen(false);
+      return;
+    }
+    let active = true;
+    const loadServicePoints = async () => {
+      setServicePointsLoading(true);
+      setServicePointsError(null);
+      try {
+        const fullAddress = [
+          shipping.address1.trim(),
+          shipping.address2.trim(),
+          shipping.postalCode.trim(),
+          shipping.city.trim(),
+        ]
+          .filter(Boolean)
+          .join(" ");
+        const params = new URLSearchParams({
+          country: shipping.country || DEFAULT_COUNTRY,
+          address: fullAddress,
+          postal_code: shipping.postalCode.trim(),
+          city: shipping.city.trim(),
+        });
+        if (selectedShippingOption?.carrier) {
+          params.set("carrier", selectedShippingOption.carrier);
+        }
+        const response = await fetch(`/api/shipping/service-points?${params}`);
+        const data = (await response.json().catch(() => null)) as
+          | { servicePoints?: ServicePoint[]; error?: string }
+          | null;
+        if (!response.ok) {
+          if (active) {
+            setServicePointsError(
+              data?.error || "Impossible de charger les points relais.",
+            );
+          }
+          return;
+        }
+        const points = Array.isArray(data?.servicePoints) ? data.servicePoints : [];
+        if (active) {
+          setServicePoints(points);
+          const hasSelection = selectedServicePointId
+            ? points.some((point) => point.id === selectedServicePointId)
+            : false;
+          if (!hasSelection) {
+            setSelectedServicePointId(null);
+          }
+        }
+      } catch {
+        if (active) {
+          setServicePointsError("Impossible de charger les points relais.");
+        }
+      } finally {
+        if (active) {
+          setServicePointsLoading(false);
+        }
+      }
+    };
+    void loadServicePoints();
+    return () => {
+      active = false;
+    };
+  }, [
+    isServicePointOption,
+    hasFullAddress,
+    shipping.address1,
+    shipping.address2,
+    shipping.country,
+    shipping.city,
+    shipping.postalCode,
+    selectedShippingOption?.carrier,
+    selectedServicePointId,
+  ]);
 
   useEffect(() => {
     let active = true;
-    if (!itemsPayload.length || !normalizedStripeKey) {
+    if (
+      !itemsPayload.length ||
+      !normalizedStripeKey ||
+      (requiresShippingOption && !selectedShippingOptionId)
+    ) {
       setClientSecret(null);
       setPaymentIntentId(null);
       setServerTotalCents(null);
@@ -354,6 +783,7 @@ export default function CheckoutClient({
           body: JSON.stringify({
             items: itemsPayload,
             discountCode: discount?.code ?? null,
+            shippingOptionId: selectedShippingOptionId,
           }),
         });
         const data = (await response.json()) as {
@@ -397,7 +827,13 @@ export default function CheckoutClient({
     return () => {
       active = false;
     };
-  }, [discount?.code, itemsPayload, normalizedStripeKey]);
+  }, [
+    discount?.code,
+    itemsPayload,
+    normalizedStripeKey,
+    requiresShippingOption,
+    selectedShippingOptionId,
+  ]);
 
   const handleApplyDiscount = async () => {
     const code = discountInput.trim().toUpperCase();
@@ -448,7 +884,9 @@ export default function CheckoutClient({
   };
 
   return (
-    <div className={`storefront ${fontClassName} min-h-screen bg-white text-black`}>
+    <div
+      className={`storefront ${fontClassName} min-h-screen bg-white text-black text-[16px] [&_*]:text-[16px]`}
+    >
       <header className="border-b border-neutral-200">
         <div className="mx-auto flex h-14 max-w-[1200px] items-center justify-between px-4">
           <Link href="/" className="flex items-center gap-2">
@@ -506,6 +944,9 @@ export default function CheckoutClient({
                             {item.variantLabel}
                           </p>
                         ) : null}
+                        <p className="text-xs text-neutral-500">
+                          Quantite: {item.quantity}
+                        </p>
                       </div>
                     </div>
                     <span>{formatPrice(item.priceCents * item.quantity)}</span>
@@ -526,7 +967,7 @@ export default function CheckoutClient({
                     setDiscountError(null);
                   }
                 }}
-                className="h-10 flex-1 border border-neutral-300 px-3 text-sm"
+                className="h-10 flex-1 border border-neutral-300 px-3 text-[16px] sm:text-sm"
               />
               <button
                 className="h-10 border border-neutral-300 px-4 text-sm text-neutral-500 disabled:opacity-60"
@@ -547,7 +988,9 @@ export default function CheckoutClient({
             <div className="flex items-center justify-between text-xs text-neutral-500">
               <span>Expedition</span>
               <span>
-                {shippingCents ? formatPrice(shippingCents) : "Offerte"}
+                {selectedShippingCents
+                  ? formatPrice(selectedShippingCents)
+                  : "Offerte"}
               </span>
             </div>
             {discount && discountCents ? (
@@ -583,7 +1026,7 @@ export default function CheckoutClient({
             <input
               type="email"
               placeholder="Adresse e-mail"
-              className="h-12 w-full border border-neutral-300 px-3 text-sm"
+              className="h-12 w-full border border-neutral-300 px-3 text-[16px] sm:text-sm"
               value={customer.email}
               onChange={(event) =>
                 setCustomer((prev) => ({ ...prev, email: event.target.value }))
@@ -593,26 +1036,35 @@ export default function CheckoutClient({
 
           <section className="space-y-4">
             <h2 className="text-lg">Livraison</h2>
-            <div className="grid grid-cols-2 gap-3 rounded bg-neutral-100 p-1">
-              <button className="flex items-center justify-center gap-2 bg-white py-2 text-sm shadow-sm">
-                <Truck className="h-4 w-4" />
-                Livraison
-              </button>
-              <button className="flex items-center justify-center gap-2 py-2 text-sm text-neutral-500">
-                <Store className="h-4 w-4" />
-                Retrait
-              </button>
-            </div>
             <div className="grid gap-3">
               <div className="flex items-center justify-between border border-neutral-300 px-3 py-3 text-sm">
                 <span>Pays/region</span>
-                <span>{shipping.country || "France"}</span>
+                {normalizedCountryCodes.length > 1 ? (
+                  <select
+                    value={shipping.country}
+                    onChange={(event) =>
+                      setShipping((prev) => ({
+                        ...prev,
+                        country: event.target.value,
+                      }))
+                    }
+                    className="text-right text-[16px] sm:text-sm"
+                  >
+                    {normalizedCountryCodes.map((code) => (
+                      <option key={code} value={code}>
+                        {getCountryLabel(code)}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <span>{getCountryLabel(shipping.country || DEFAULT_COUNTRY)}</span>
+                )}
               </div>
               <div className="grid gap-3 lg:grid-cols-2">
                 <input
                   type="text"
                   placeholder="Prenom"
-                  className="h-12 border border-neutral-300 px-3 text-sm"
+                  className="h-12 border border-neutral-300 px-3 text-[16px] sm:text-sm"
                   value={customer.firstName}
                   onChange={(event) =>
                     setCustomer((prev) => ({
@@ -624,7 +1076,7 @@ export default function CheckoutClient({
                 <input
                   type="text"
                   placeholder="Nom"
-                  className="h-12 border border-neutral-300 px-3 text-sm"
+                  className="h-12 border border-neutral-300 px-3 text-[16px] sm:text-sm"
                   value={customer.lastName}
                   onChange={(event) =>
                     setCustomer((prev) => ({
@@ -634,11 +1086,12 @@ export default function CheckoutClient({
                   }
                 />
               </div>
-              <div className="flex items-center gap-2 border border-neutral-300 px-3 text-sm">
+              <div className="flex items-center gap-2 border border-neutral-300 px-3 text-[16px] sm:text-sm">
                 <input
                   type="text"
                   placeholder="Adresse"
-                  className="h-12 flex-1 bg-transparent text-sm"
+                  className="h-12 flex-1 bg-transparent text-[16px] sm:text-sm"
+                  ref={addressInputRef}
                   value={shipping.address1}
                   onChange={(event) =>
                     setShipping((prev) => ({
@@ -652,7 +1105,7 @@ export default function CheckoutClient({
               <input
                 type="text"
                 placeholder="Appartement, suite, etc. (optionnel)"
-                className="h-12 border border-neutral-300 px-3 text-sm"
+                className="h-12 border border-neutral-300 px-3 text-[16px] sm:text-sm"
                 value={shipping.address2}
                 onChange={(event) =>
                   setShipping((prev) => ({
@@ -665,7 +1118,7 @@ export default function CheckoutClient({
                 <input
                   type="text"
                   placeholder="Code postal"
-                  className="h-12 border border-neutral-300 px-3 text-sm"
+                  className="h-12 border border-neutral-300 px-3 text-[16px] sm:text-sm"
                   value={shipping.postalCode}
                   onChange={(event) =>
                     setShipping((prev) => ({
@@ -677,7 +1130,7 @@ export default function CheckoutClient({
                 <input
                   type="text"
                   placeholder="Ville"
-                  className="h-12 border border-neutral-300 px-3 text-sm"
+                  className="h-12 border border-neutral-300 px-3 text-[16px] sm:text-sm"
                   value={shipping.city}
                   onChange={(event) =>
                     setShipping((prev) => ({
@@ -691,7 +1144,7 @@ export default function CheckoutClient({
                 <input
                   type="text"
                   placeholder="Telephone (optionnel)"
-                  className="h-12 flex-1 bg-transparent text-sm"
+                  className="h-12 flex-1 bg-transparent text-[16px] sm:text-sm"
                   value={customer.phone}
                   onChange={(event) =>
                     setCustomer((prev) => ({
@@ -707,8 +1160,222 @@ export default function CheckoutClient({
 
           <section className="space-y-3">
             <h2 className="text-lg">Mode d’expedition</h2>
-            <div className="rounded bg-neutral-100 p-4 text-sm text-neutral-500">
-              Livraison {shippingCents ? formatPrice(shippingCents) : "offerte"}.
+            <p className="text-xs text-neutral-500">
+              24/48h de traitement en plus des délais de livraison
+            </p>
+            <div className="space-y-3">
+              {!hasFullAddress ? (
+                <div className="rounded bg-neutral-100 p-4 text-sm text-neutral-500">
+                  Entrez votre adresse complete pour voir les options de livraison.
+                </div>
+              ) : shippingOptionsLoading ? (
+                <div className="rounded bg-neutral-100 p-4 text-sm text-neutral-500">
+                  Chargement des options de livraison...
+                </div>
+              ) : shippingOptionsError ? (
+                <div className="rounded border border-red-200 bg-red-50 p-4 text-sm text-red-600">
+                  {shippingOptionsError}
+                </div>
+              ) : eligibleShippingOptions.length === 0 ? (
+                <div className="rounded bg-neutral-100 p-4 text-sm text-neutral-500">
+                  Aucune option de livraison disponible.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {eligibleShippingOptions.map((option) => {
+                    const priceCents = parsePriceToCents(option.price) ?? 0;
+                    const isSelected = option.id === selectedShippingOptionId;
+                    return (
+                      <label
+                        key={option.id}
+                        className={`flex cursor-pointer items-start justify-between gap-4 rounded border px-3 py-3 text-sm transition ${
+                          isSelected
+                            ? "border-blue-600 bg-blue-50"
+                            : "border-neutral-200 bg-white"
+                        }`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <input
+                            type="radio"
+                            name="shipping-option"
+                            checked={isSelected}
+                            onChange={() => setSelectedShippingOptionId(option.id)}
+                          />
+                          <div>
+                            <p className="font-medium text-neutral-900">
+                              {option.title}
+                            </p>
+                            {option.description ? (
+                              <p className="text-xs text-neutral-500">
+                                {option.description}
+                              </p>
+                            ) : null}
+                          </div>
+                        </div>
+                        <span className="text-sm text-neutral-700">
+                          {priceCents ? formatPrice(priceCents) : "Offerte"}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+              {isServicePointOption && hasFullAddress ? (
+                <div className="rounded border border-neutral-200 bg-white p-4 text-sm text-neutral-700">
+                  <p className="text-xs uppercase text-neutral-500">
+                    Points relais
+                  </p>
+                  <Drawer
+                    open={isServicePointDrawerOpen}
+                    onOpenChange={setIsServicePointDrawerOpen}
+                  >
+                    <DrawerTrigger asChild>
+                      <button
+                        type="button"
+                        className="mt-3 w-full rounded border border-neutral-300 px-3 py-2 text-sm text-neutral-800 transition hover:border-neutral-400"
+                      >
+                        {selectedServicePoint
+                          ? "Changer de point relais"
+                          : "Choisir un point relais"}
+                      </button>
+                    </DrawerTrigger>
+                    <DrawerContent className="h-[80vh] sm:h-auto sm:max-h-[95vh]">
+                      <DrawerHeader className="px-4 pb-2 pt-4">
+                        <DrawerTitle className="text-sm">
+                          Choisir un point relais
+                        </DrawerTitle>
+                      </DrawerHeader>
+                      <div className="px-4 pb-6">
+                        {servicePointsLoading ? (
+                          <p className="text-xs text-neutral-500">
+                            Chargement des points relais...
+                          </p>
+                        ) : servicePointsError ? (
+                          <p className="text-xs text-red-600">
+                            {servicePointsError}
+                          </p>
+                        ) : servicePoints.length === 0 ? (
+                          <p className="text-xs text-neutral-500">
+                            Aucun point relais disponible.
+                          </p>
+                        ) : (
+                          <div className="max-h-72 space-y-2 overflow-y-auto pr-2">
+                            {servicePoints.map((point) => {
+                              const isSelected =
+                                point.id === selectedServicePointId;
+                              const distance = formatDistance(point.distance);
+                              const openingTimes = point.formatted_opening_times;
+                              const dayLabels = [
+                                "Lun",
+                                "Mar",
+                                "Mer",
+                                "Jeu",
+                                "Ven",
+                                "Sam",
+                                "Dim",
+                              ];
+                              const hasOpeningTimes = Boolean(
+                                openingTimes &&
+                                  dayLabels.some((_, index) => {
+                                    const slots = openingTimes?.[String(index)];
+                                    return Array.isArray(slots) && slots.length > 0;
+                                  }),
+                              );
+                              return (
+                                <label
+                                  key={point.id}
+                                  className={`flex cursor-pointer items-start justify-between gap-3 rounded border px-3 py-2 text-xs transition ${
+                                    isSelected
+                                      ? "border-blue-600 bg-blue-50"
+                                      : "border-neutral-200 bg-white"
+                                  }`}
+                                >
+                                  <div className="flex items-start gap-2">
+                                    <input
+                                      type="radio"
+                                      name="service-point"
+                                      checked={isSelected}
+                                      onChange={() => {
+                                        setSelectedServicePointId(point.id);
+                                        setIsServicePointDrawerOpen(false);
+                                      }}
+                                    />
+                                    <div>
+                                      <p className="text-sm font-medium text-neutral-900">
+                                        {point.name}
+                                      </p>
+                                      <p className="text-xs text-neutral-500">
+                                        {point.house_number} {point.street}
+                                        <br />
+                                        {point.postal_code} {point.city}
+                                      </p>
+                                      {hasOpeningTimes ? (
+                                        <div className="mt-2 space-y-0.5 text-[11px] text-neutral-500">
+                                          {dayLabels.map((label, index) => {
+                                            const slots =
+                                              openingTimes?.[String(index)] ?? [];
+                                            const value =
+                                              Array.isArray(slots) && slots.length
+                                                ? slots.join(", ")
+                                                : "Fermé";
+                                            return (
+                                              <div key={label} className="flex gap-2">
+                                                <span className="w-7">
+                                                  {label}
+                                                </span>
+                                                <span>{value}</span>
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      ) : null}
+                                    </div>
+                                  </div>
+                                  {distance ? (
+                                    <span className="min-w-[52px] text-right text-xs text-neutral-500">
+                                      {distance}
+                                    </span>
+                                  ) : null}
+                                </label>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </DrawerContent>
+                  </Drawer>
+                  {requiresServicePointSelection ? (
+                    <p className="mt-2 text-xs text-red-600">
+                      Choisissez un point relais pour continuer.
+                    </p>
+                  ) : null}
+                  {servicePointsError ? (
+                    <p className="mt-2 text-xs text-red-600">{servicePointsError}</p>
+                  ) : servicePointsLoading ? (
+                    <p className="mt-2 text-xs text-neutral-500">
+                      Chargement des points relais...
+                    </p>
+                  ) : null}
+                  {selectedServicePoint ? (
+                    <div className="mt-3 rounded border border-neutral-200 bg-neutral-50 p-3 text-xs text-neutral-600">
+                      <p className="text-sm font-medium text-neutral-900">
+                        {selectedServicePoint.name}
+                      </p>
+                      <p className="mt-1 text-xs text-neutral-500">
+                        {selectedServicePoint.street}{" "}
+                        {selectedServicePoint.house_number},{" "}
+                        {selectedServicePoint.postal_code}{" "}
+                        {selectedServicePoint.city}
+                      </p>
+                      {formatDistance(selectedServicePoint.distance) ? (
+                        <p className="mt-1 text-xs text-neutral-500">
+                          {formatDistance(selectedServicePoint.distance)}
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
           </section>
 
@@ -785,8 +1452,8 @@ export default function CheckoutClient({
                           <div>
                             <p>Total</p>
                             <p className="text-xs text-neutral-500">
-                              {items.length} article
-                              {items.length > 1 ? "s" : ""}
+                              {totalItemCount} article
+                              {totalItemCount > 1 ? "s" : ""}
                             </p>
                           </div>
                         </div>
@@ -802,9 +1469,15 @@ export default function CheckoutClient({
                         shipping={shipping}
                         itemsPayload={itemsPayload}
                         discountCode={discount?.code ?? null}
+                        shippingOptionId={selectedShippingOptionId}
                         paymentIntentId={paymentIntentId}
+                        servicePoint={selectedServicePoint}
                         onPaid={onPaid}
-                        disabled={!itemsPayload.length}
+                        disabled={
+                          !itemsPayload.length ||
+                          (requiresShippingOption && !selectedShippingOptionId) ||
+                          requiresServicePointSelection
+                        }
                       />
                     </section>
                   </Elements>
@@ -868,7 +1541,7 @@ export default function CheckoutClient({
                       setDiscountError(null);
                     }
                   }}
-                  className="h-10 flex-1 border border-neutral-300 px-3 text-sm"
+                  className="h-10 flex-1 border border-neutral-300 px-3 text-[16px] sm:text-sm"
                 />
                 <button
                   type="button"
@@ -888,7 +1561,11 @@ export default function CheckoutClient({
               </div>
               <div className="flex items-center justify-between text-xs text-neutral-500">
                 <span>Expedition</span>
-                <span>{shippingCents ? formatPrice(shippingCents) : "Offerte"}</span>
+                <span>
+                  {selectedShippingCents
+                    ? formatPrice(selectedShippingCents)
+                    : "Offerte"}
+                </span>
               </div>
               {discount && discountCents ? (
                 <div className="flex items-center justify-between text-xs text-neutral-500">
@@ -906,6 +1583,7 @@ export default function CheckoutClient({
           </div>
         </aside>
       </div>
+
     </div>
   );
 }

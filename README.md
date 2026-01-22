@@ -30,6 +30,9 @@ This project uses [`next/font`](https://nextjs.org/docs/app/building-your-applic
 If you already have tables and need to add PayPal fields, run `npx tsx scripts/migrate-add-paypal-columns.ts`.
 If you already have orders and need an incremental order number, run `npx tsx scripts/migrate-add-order-number.ts`.
 If you already have orders and want order tags, run `npx tsx scripts/migrate-add-order-tags.ts`.
+If you already have orders and want to backfill customers (and remove customer columns from orders), run `npx tsx scripts/migrate-add-customers.ts`.
+If you already backfilled customers and want to enforce `orders.customer_id` as NOT NULL, run `npx tsx scripts/migrate-enforce-order-customer.ts`.
+If you already have orders and want refund tracking, run `npx tsx scripts/migrate-add-order-refunds.ts`.
 
 ### Admin access
 

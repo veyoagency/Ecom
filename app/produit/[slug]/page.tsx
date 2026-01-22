@@ -2,17 +2,11 @@ import localFont from "next/font/local";
 import { notFound } from "next/navigation";
 import { Op } from "sequelize";
 
-import ProductPurchaseClient from "@/app/produit/[slug]/ProductPurchaseClient";
+import ProductDetailClient from "@/app/produit/[slug]/ProductDetailClient";
 import StorefrontCartProvider from "@/components/storefront/StorefrontCartProvider";
 import ProductCard from "@/components/storefront/ProductCard";
 import StoreFooterServer from "@/components/storefront/StoreFooterServer";
 import StoreHeaderServer from "@/components/storefront/StoreHeaderServer";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
 import {
   Collection,
   Product,
@@ -88,15 +82,15 @@ export default async function ProductPage({
         as: "options",
         attributes: ["id", "name", "position"],
         required: false,
-        include: [
-          {
-            model: ProductOptionValue,
-            as: "values",
-            attributes: ["id", "value", "position"],
-            required: false,
-          },
-        ],
-      },
+          include: [
+            {
+              model: ProductOptionValue,
+              as: "values",
+              attributes: ["id", "value", "position", "image_url"],
+              required: false,
+            },
+          ],
+        },
       {
         model: Collection,
         as: "collections",
@@ -123,7 +117,11 @@ export default async function ProductPage({
     options?: Array<{
       name: string;
       position: number | null;
-      values?: Array<{ value: string; position: number | null }>;
+      values?: Array<{
+        value: string;
+        position: number | null;
+        image_url?: string | null;
+      }>;
     }>;
     collections?: Array<{
       id: number;
@@ -153,6 +151,19 @@ export default async function ProductPage({
         .map((value) => value.value),
     }))
     .filter((option) => option.name && option.values.length > 0);
+
+  const variantImages = (productJson.options ?? [])
+    .slice()
+    .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
+    .flatMap((option) =>
+      (option.values ?? [])
+        .filter((value) => value.image_url)
+        .map((value) => ({
+          option: option.name,
+          value: value.value,
+          imageUrl: value.image_url as string,
+        })),
+    );
 
   const collections = productJson.collections ?? [];
   const relatedCollection = collections.find(
@@ -215,129 +226,20 @@ export default async function ProductPage({
         <StoreHeaderServer fontClassName={futura.className} />
         <main className="bg-white py-5">
           <div className="mx-auto flex max-w-[1500px] flex-col gap-8 px-0 sm:px-6">
-            <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
-            <div className="no-scrollbar flex gap-4 overflow-x-auto snap-x snap-mandatory">
-              {images.length === 0 ? (
-                <div className="aspect-[4/5] min-w-[85%] snap-start bg-neutral-100 sm:min-w-[70%] lg:min-w-full" />
-              ) : (
-                images.map((media, index) => (
-                  <div
-                    key={`${media.url}-${index}`}
-                    className="min-w-[85%] snap-start sm:min-w-[70%] lg:min-w-full"
-                  >
-                    {media.kind === "video" ? (
-                      <video
-                        src={media.url}
-                        controls
-                        className="aspect-[4/5] w-full bg-white object-cover"
-                      />
-                    ) : (
-                      <img
-                        src={media.url}
-                        alt={productJson.title}
-                        className="aspect-[4/5] w-full bg-white object-cover"
-                      />
-                    )}
-                  </div>
-                ))
-              )}
-            </div>
-            <div className="flex flex-col gap-6 px-4 sm:px-0">
-              <div className="space-y-2">
-                <h1 className="text-[28px] text-black lg:text-[32px]">
-                  {productJson.title}
-                </h1>
-                <p className="text-lg text-black">
-                  {formatPrice(productJson.price_cents)}
-                </p>
-                <div className="flex items-center gap-2 text-sm text-neutral-700">
-                  <span
-                    className={`inline-flex ${
-                      productJson.in_stock ? "text-emerald-500" : "text-red-500"
-                    }`}
-                    aria-hidden="true"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      viewBox="0 0 15 15"
-                      fill="none"
-                      width="15"
-                      height="15"
-                    >
-                      <circle cx="7.5" cy="7.5" r="7.5" fill="currentColor" />
-                      <circle
-                        cx="7.5"
-                        cy="7.5"
-                        r="5"
-                        fill="currentColor"
-                        stroke="#FFF"
-                      />
-                    </svg>
-                  </span>
-                  {productJson.in_stock ? "En stock" : "Rupture de stock"}
-                </div>
-              </div>
-
-              <ProductPurchaseClient
-                product={{
-                  id: Number(productJson.id),
-                  slug: productJson.slug,
-                  title: productJson.title,
-                  priceCents: productJson.price_cents,
-                  imageUrl: primaryImage,
-                }}
-                inStock={productJson.in_stock ?? true}
-                options={options}
-              />
-
-              {productJson.description_html ? (
-                <div
-                  className="space-y-3 text-sm text-[#767676] [&>p]:mb-3"
-                  dangerouslySetInnerHTML={{
-                    __html: productJson.description_html,
-                  }}
-                />
-              ) : null}
-
-              <Accordion type="single" collapsible className="border-t border-neutral-200">
-                {[
-                  {
-                    title: "Details du produit",
-                    content:
-                      "Chaque piece est concue avec des finitions soignées et un confort optimal.",
-                  },
-                  {
-                    title: "Lavage & entretien",
-                    content:
-                      "Lavage en machine a 30° recommande. Evitez le seche-linge.",
-                  },
-                  {
-                    title: "Taille",
-                    content:
-                      "Consultez notre guide des tailles pour choisir votre coupe ideale.",
-                  },
-                  {
-                    title: "Livraison",
-                    content:
-                      "Livraison en France sous 2 a 5 jours ouvres apres expedition.",
-                  },
-                ].map((item) => (
-                  <AccordionItem
-                    key={item.title}
-                    value={item.title}
-                    className="border-neutral-200"
-                  >
-                    <AccordionTrigger className="text-xs font-normal uppercase text-neutral-900 hover:no-underline">
-                      {item.title}
-                    </AccordionTrigger>
-                    <AccordionContent className="text-sm text-[#767676]">
-                      {item.content}
-                    </AccordionContent>
-                  </AccordionItem>
-                ))}
-              </Accordion>
-            </div>
-          </div>
+            <ProductDetailClient
+              product={{
+                id: Number(productJson.id),
+                slug: productJson.slug,
+                title: productJson.title,
+                priceCents: productJson.price_cents,
+                imageUrl: primaryImage,
+                descriptionHtml: productJson.description_html ?? null,
+              }}
+              inStock={productJson.in_stock ?? true}
+              options={options}
+              images={images}
+              variantImages={variantImages}
+            />
 
           {relatedItems.length > 0 ? (
             <section className="space-y-4 px-4 sm:px-0">

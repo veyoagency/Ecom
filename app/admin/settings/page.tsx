@@ -45,6 +45,19 @@ export default async function AdminSettingsPage() {
   }
 
   const settings = await WebsiteSetting.findOne();
+  let googleMapsCountries: string[] = [];
+  if (settings?.google_maps_country_codes) {
+    try {
+      const parsed = JSON.parse(settings.google_maps_country_codes);
+      if (Array.isArray(parsed)) {
+        googleMapsCountries = parsed
+          .map((code) => code?.toString().trim().toUpperCase())
+          .filter((code) => code);
+      }
+    } catch {
+      googleMapsCountries = [];
+    }
+  }
 
   return (
     <SettingsClient
@@ -63,6 +76,8 @@ export default async function AdminSettingsPage() {
         paypalClientSecretHint: settings?.paypal_client_secret_hint ?? null,
         sendcloudPublicKeyHint: settings?.sendcloud_public_key_hint ?? null,
         sendcloudPrivateKeyHint: settings?.sendcloud_private_key_hint ?? null,
+        googleMapsApiKeyHint: settings?.google_maps_api_key_hint ?? null,
+        googleMapsCountryCodes: googleMapsCountries,
       }}
     />
   );

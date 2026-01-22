@@ -60,7 +60,7 @@ type CollectionOption = {
 
 type ProductVariantInput = {
   name: string;
-  values: string[];
+  values: Array<{ value: string; imageUrl?: string | null }>;
 };
 
 type ProductMediaInput = {
@@ -76,6 +76,7 @@ type ProductInitial = {
   descriptionHtml: string;
   priceCents: number;
   compareAtCents: number | null;
+  weightKg: string | null;
   active: boolean;
   inStock: boolean;
   collectionIds: number[];
@@ -99,6 +100,7 @@ type MediaItem = {
 type VariantValue = {
   id: string;
   value: string;
+  imageUrl?: string | null;
 };
 
 type VariantOption = {
@@ -226,6 +228,7 @@ export default function AddProductClient({
   const [compareAt, setCompareAt] = useState(
     formatAmount(product?.compareAtCents),
   );
+  const [weightKg, setWeightKg] = useState(product?.weightKg ?? "");
   const [slug, setSlug] = useState(product?.slug ?? "");
   const [status, setStatus] = useState(
     product ? (product.active ? "active" : "draft") : "active",
@@ -253,7 +256,8 @@ export default function AddProductClient({
       name: variant.name,
       values: variant.values.map((value) => ({
         id: createMediaId(),
-        value,
+        value: value.value,
+        imageUrl: value.imageUrl ?? null,
       })),
     }));
   });
@@ -264,6 +268,10 @@ export default function AddProductClient({
   const [actionLoading, setActionLoading] = useState<
     "duplicate" | "delete" | null
   >(null);
+  const [variantImagePicker, setVariantImagePicker] = useState<{
+    variantId: string;
+    valueId: string;
+  } | null>(null);
 
   const mediaItemsRef = useRef<MediaItem[]>([]);
   useEffect(() => {
@@ -329,7 +337,31 @@ export default function AddProductClient({
     [mediaItems],
   );
 
+  const variantImageOptions = useMemo(() => {
+    return mediaItems
+      .filter((item) => item.kind === "image")
+      .map((item, index) => ({
+        url: item.url,
+        label:
+          item.file?.name ??
+          item.url.split("/").pop() ??
+          `Image ${index + 1}`,
+      }));
+  }, [mediaItems]);
+
+  const activeVariantImage = useMemo(() => {
+    if (!variantImagePicker) return null;
+    const variant = variants.find(
+      (entry) => entry.id === variantImagePicker.variantId,
+    );
+    const value = variant?.values.find(
+      (entry) => entry.id === variantImagePicker.valueId,
+    );
+    return value?.imageUrl ?? null;
+  }, [variantImagePicker, variants]);
+
   const handleRemoveMedia = useCallback((id: string) => {
+    const removed = mediaItemsRef.current.find((item) => item.id === id);
     setMediaItems((items) => {
       const next = items.filter((item) => item.id !== id);
       const removed = items.find((item) => item.id === id);
@@ -338,6 +370,18 @@ export default function AddProductClient({
       }
       return next;
     });
+    if (removed?.url) {
+      setVariants((items) =>
+        items.map((variant) => ({
+          ...variant,
+          values: variant.values.map((value) =>
+            value.imageUrl === removed.url
+              ? { ...value, imageUrl: null }
+              : value,
+          ),
+        })),
+      );
+    }
   }, []);
 
   const handleAddVariant = useCallback(() => {
@@ -346,7 +390,7 @@ export default function AddProductClient({
       {
         id: createMediaId(),
         name: "",
-        values: [{ id: createMediaId(), value: "" }],
+        values: [{ id: createMediaId(), value: "", imageUrl: null }],
       },
     ]);
   }, []);
@@ -374,7 +418,7 @@ export default function AddProductClient({
               ...variant,
               values: [
                 ...variant.values,
-                { id: createMediaId(), value: "" },
+                { id: createMediaId(), value: "", imageUrl: null },
               ],
             }
           : variant,
@@ -416,6 +460,46 @@ export default function AddProductClient({
     [],
   );
 
+  const handleVariantValueImageChange = useCallback(
+    (variantId: string, valueId: string, imageUrl: string) => {
+      setVariants((items) =>
+        items.map((variant) =>
+          variant.id === variantId
+            ? {
+                ...variant,
+                values: variant.values.map((entry) =>
+                  entry.id === valueId
+                    ? { ...entry, imageUrl: imageUrl || null }
+                    : entry,
+                ),
+              }
+            : variant,
+        ),
+      );
+    },
+    [],
+  );
+
+  const handleOpenVariantImagePicker = useCallback(
+    (variantId: string, valueId: string) => {
+      setVariantImagePicker({ variantId, valueId });
+    },
+    [],
+  );
+
+  const handleSelectVariantImage = useCallback(
+    (imageUrl: string) => {
+      if (!variantImagePicker) return;
+      handleVariantValueImageChange(
+        variantImagePicker.variantId,
+        variantImagePicker.valueId,
+        imageUrl,
+      );
+      setVariantImagePicker(null);
+    },
+    [handleVariantValueImageChange, variantImagePicker],
+  );
+
   const previewItem = useMemo(
     () => mediaItems.find((item) => item.id === previewId) ?? null,
     [mediaItems, previewId],
@@ -445,6 +529,7 @@ export default function AddProductClient({
       formData.append("title", title.trim());
       formData.append("description", descriptionHtml.trim());
       formData.append("price", price);
+      formData.append("weight_kg", weightKg.trim());
       if (compareAt.trim()) {
         formData.append("compare_at", compareAt);
       }
@@ -454,27 +539,39 @@ export default function AddProductClient({
         formData.append("slug", slug.trim());
       }
       collectionIds.forEach((id) => formData.append("collections", id));
-      const variantPayload = variants
-        .map((variant) => ({
-          name: variant.name.trim(),
-          values: variant.values
-            .map((value) => value.value.trim())
-            .filter(Boolean),
-        }))
-        .filter((variant) => variant.name && variant.values.length > 0);
-      if (variantPayload.length > 0) {
-        formData.append("variants", JSON.stringify(variantPayload));
-      }
       const mediaOrder: string[] = [];
       const newFiles: File[] = [];
+      const newFileIndexByUrl = new Map<string, number>();
       mediaItems.forEach((item) => {
         if (item.isNew && item.file) {
+          newFileIndexByUrl.set(item.url, newFiles.length);
           mediaOrder.push(`new:${newFiles.length}`);
           newFiles.push(item.file);
         } else {
           mediaOrder.push(`existing:${item.url}`);
         }
       });
+      const variantPayload = variants
+        .map((variant) => ({
+          name: variant.name.trim(),
+          values: variant.values
+            .map((value) => {
+              const trimmedValue = value.value.trim();
+              const rawImage = value.imageUrl?.trim() || "";
+              const newIndex = rawImage ? newFileIndexByUrl.get(rawImage) : undefined;
+              const imageToken =
+                typeof newIndex === "number" ? `new:${newIndex}` : rawImage || null;
+              return {
+                value: trimmedValue,
+                imageUrl: imageToken,
+              };
+            })
+            .filter((entry) => entry.value),
+        }))
+        .filter((variant) => variant.name && variant.values.length > 0);
+      if (variantPayload.length > 0) {
+        formData.append("variants", JSON.stringify(variantPayload));
+      }
       formData.append("media_order", JSON.stringify(mediaOrder));
       newFiles.forEach((file) => formData.append("media", file));
 
@@ -741,6 +838,30 @@ export default function AddProductClient({
 
           <Card className="border-neutral-200 bg-white shadow-sm">
             <CardHeader>
+              <CardTitle>Weight</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Field>
+                <FieldLabel htmlFor="product-weight">Weight (kg)</FieldLabel>
+                <Input
+                  id="product-weight"
+                  name="weight_kg"
+                  type="number"
+                  step="0.001"
+                  min="0"
+                  placeholder="0.5"
+                  value={weightKg}
+                  onChange={(event) => setWeightKg(event.target.value)}
+                />
+              </Field>
+              <FieldDescription className="text-xs text-neutral-500">
+                Used for shipping calculations.
+              </FieldDescription>
+            </CardContent>
+          </Card>
+
+          <Card className="border-neutral-200 bg-white shadow-sm">
+            <CardHeader>
               <CardTitle>Variants</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -788,6 +909,27 @@ export default function AddProductClient({
                             key={value.id}
                             className="flex items-center gap-2"
                           >
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleOpenVariantImagePicker(
+                                  variant.id,
+                                  value.id,
+                                )
+                              }
+                              className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-md border border-neutral-200 bg-neutral-50 text-[10px] text-neutral-400 transition hover:border-neutral-300"
+                              aria-label="Select variant image"
+                            >
+                              {value.imageUrl ? (
+                                <img
+                                  src={value.imageUrl}
+                                  alt="Variant"
+                                  className="h-full w-full object-cover"
+                                />
+                              ) : (
+                                "Image"
+                              )}
+                            </button>
                             <Input
                               placeholder="Small, Red, Cotton"
                               value={value.value}
@@ -798,6 +940,7 @@ export default function AddProductClient({
                                   event.target.value,
                                 )
                               }
+                              className="flex-1"
                             />
                             <button
                               type="button"
@@ -954,6 +1097,66 @@ export default function AddProductClient({
           </Card>
         </div>
       </form>
+      <Dialog
+        open={Boolean(variantImagePicker)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setVariantImagePicker(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Select variant image</DialogTitle>
+          </DialogHeader>
+          {variantImageOptions.length === 0 ? (
+            <p className="text-sm text-neutral-500">
+              Add product images to use them for variant previews.
+            </p>
+          ) : (
+            <div className="grid max-h-[60vh] grid-cols-2 gap-3 overflow-y-auto pr-1 sm:grid-cols-3">
+              <button
+                type="button"
+                onClick={() => handleSelectVariantImage("")}
+                className={`flex flex-col items-center gap-2 rounded-md border p-2 text-xs text-neutral-600 transition ${
+                  !activeVariantImage
+                    ? "border-neutral-900 text-neutral-900"
+                    : "border-neutral-200 hover:border-neutral-300"
+                }`}
+              >
+                <div className="flex h-20 w-full items-center justify-center rounded-md border border-dashed border-neutral-200 bg-neutral-50 text-[11px] text-neutral-400">
+                  No image
+                </div>
+                None
+              </button>
+              {variantImageOptions.map((option) => {
+                const isSelected = activeVariantImage === option.url;
+                return (
+                  <button
+                    key={option.url}
+                    type="button"
+                    onClick={() => handleSelectVariantImage(option.url)}
+                    className={`flex flex-col items-start gap-2 rounded-md border p-2 text-left text-xs transition ${
+                      isSelected
+                        ? "border-neutral-900 text-neutral-900"
+                        : "border-neutral-200 hover:border-neutral-300"
+                    }`}
+                  >
+                    <img
+                      src={option.url}
+                      alt={option.label}
+                      className="h-20 w-full rounded-md object-cover"
+                    />
+                    <span className="line-clamp-2 text-[11px] text-neutral-600">
+                      {option.label}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
       <Dialog
         open={Boolean(previewItem)}
         onOpenChange={(open) => {

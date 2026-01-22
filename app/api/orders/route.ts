@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 
 import { DEFAULT_COUNTRY } from "@/lib/constants";
+import { upsertCustomer } from "@/lib/customers";
 import { sendEmail } from "@/lib/email";
 import { generatePublicId } from "@/lib/ids";
 import { DiscountCode, Order, OrderItem, Product, sequelize } from "@/lib/models";
+import { resolveShippingSelection } from "@/lib/shipping-options";
 import {
   getOptionalTrimmedString,
   getTrimmedString,
@@ -59,6 +61,30 @@ function parseOrderBody(body: unknown) {
   const country = normalizeCountry(
     getOptionalTrimmedString(shipping.country),
   );
+  const servicePointRecord =
+    typeof record.servicePoint === "object" && record.servicePoint !== null
+      ? (record.servicePoint as Record<string, unknown>)
+      : null;
+  const servicePointIdValue = Number(servicePointRecord?.id);
+  const servicePointId =
+    Number.isInteger(servicePointIdValue) && servicePointIdValue > 0
+      ? servicePointIdValue
+      : null;
+  const servicePointName = getOptionalTrimmedString(servicePointRecord?.name);
+  const servicePointStreet = getOptionalTrimmedString(
+    servicePointRecord?.street,
+  );
+  const servicePointHouseNumber = getOptionalTrimmedString(
+    servicePointRecord?.house_number,
+  );
+  const servicePointPostalCode = getOptionalTrimmedString(
+    servicePointRecord?.postal_code,
+  );
+  const servicePointCity = getOptionalTrimmedString(servicePointRecord?.city);
+  const servicePointDistanceValue = Number(servicePointRecord?.distance);
+  const servicePointDistance = Number.isFinite(servicePointDistanceValue)
+    ? Math.round(servicePointDistanceValue)
+    : null;
 
   const preferredPaymentMethod = getTrimmedString(
     record.preferred_payment_method,
@@ -66,6 +92,13 @@ function parseOrderBody(body: unknown) {
   const discountCode = getOptionalTrimmedString(record.discount_code);
 
   const itemsValue = record.items;
+  const rawShippingOptionId = Number(
+    record.shippingOptionId ?? record.shipping_option_id,
+  );
+  const shippingOptionId =
+    Number.isInteger(rawShippingOptionId) && rawShippingOptionId > 0
+      ? rawShippingOptionId
+      : null;
 
   const errors: string[] = [];
   if (!isNonEmptyString(firstName)) {
@@ -149,6 +182,16 @@ function parseOrderBody(body: unknown) {
         product_id,
         qty,
       })),
+      shippingOptionId,
+      servicePoint: {
+        id: servicePointId,
+        name: servicePointName,
+        street: servicePointStreet,
+        house_number: servicePointHouseNumber,
+        postal_code: servicePointPostalCode,
+        city: servicePointCity,
+        distance: servicePointDistance,
+      },
     },
   };
 }
@@ -220,6 +263,7 @@ export async function POST(request: Request) {
     preferredPaymentMethod,
     items,
     discountCode,
+    servicePoint,
   } = parsed.data;
 
   const productIds = items.map((item) => item.product_id);
@@ -239,7 +283,38 @@ export async function POST(request: Request) {
     products.map((product) => [Number(product.id), product]),
   );
 
-  const shippingCents = getShippingCents();
+  const defaultShippingCents = getShippingCents();
+  let shippingCents = defaultShippingCents;
+  let shippingOption: Awaited<
+    ReturnType<typeof resolveShippingSelection>
+  >["option"] = null;
+  try {
+    const selection = await resolveShippingSelection({
+      optionId: parsed.data.shippingOptionId,
+      subtotalCents,
+      defaultShippingCents,
+    });
+    shippingCents = selection.shippingCents;
+    shippingOption = selection.option;
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Option de livraison invalide.",
+      },
+      { status: 400 },
+    );
+  }
+  if (shippingOption?.shipping_type === "service_points" && !servicePoint?.id) {
+    return NextResponse.json(
+      { error: "Point relais obligatoire." },
+      { status: 400 },
+    );
+  }
+  const shouldStoreServicePoint =
+    shippingOption?.shipping_type === "service_points";
   const subtotalCents = items.reduce((total, item) => {
     const product = productMap.get(Number(item.product_id));
     if (!product) {
@@ -288,22 +363,54 @@ export async function POST(request: Request) {
   const order = await sequelize.transaction(async (transaction) => {
     const publicId = generatePublicId();
 
+    const customer = await upsertCustomer(
+      {
+        email,
+        firstName,
+        lastName,
+        phone,
+        address1,
+        address2,
+        postalCode,
+        city,
+        country,
+      },
+      { transaction },
+    );
+
     const insertedOrder = await Order.create(
       {
         public_id: publicId,
         status: "pending_payment",
-        first_name: firstName,
-        last_name: lastName,
-        email,
-        phone,
-        address1,
-        address2,
-        postal_code: postalCode,
-        city,
-        country,
+        payment_status: "unpaid",
+        refunded_cents: 0,
+        customer_id: customer.id,
         preferred_payment_method: preferredPaymentMethod,
         subtotal_cents: subtotalCents,
         shipping_cents: shippingCents,
+        shipping_carrier_id: shippingOption?.id ?? null,
+        shipping_option_title: shippingOption?.title ?? null,
+        shipping_option_carrier: shippingOption?.carrier ?? null,
+        shipping_option_type: shippingOption?.shipping_type ?? null,
+        service_point_id: shouldStoreServicePoint ? servicePoint?.id ?? null : null,
+        service_point_name: shouldStoreServicePoint
+          ? servicePoint?.name ?? null
+          : null,
+        service_point_street: shouldStoreServicePoint
+          ? servicePoint?.street ?? null
+          : null,
+        service_point_house_number: shouldStoreServicePoint
+          ? servicePoint?.house_number ?? null
+          : null,
+        service_point_postal_code: shouldStoreServicePoint
+          ? servicePoint?.postal_code ?? null
+          : null,
+        service_point_city: shouldStoreServicePoint
+          ? servicePoint?.city ?? null
+          : null,
+        service_point_distance: shouldStoreServicePoint
+          ? servicePoint?.distance ?? null
+          : null,
         discount_code_id: discount ? discount.id : null,
         discount_cents: discountCents || null,
         total_cents: totalCents,

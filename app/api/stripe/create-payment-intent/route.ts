@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { DiscountCode, Product } from "@/lib/models";
+import { resolveShippingSelection } from "@/lib/shipping-options";
 import { getStripeClient } from "@/lib/stripe";
 import { getOptionalTrimmedString } from "@/lib/validators";
 
@@ -16,6 +17,7 @@ type CartItemInput = {
 type CreatePaymentIntentPayload = {
   items: CartItemInput[];
   discountCode?: string | null;
+  shippingOptionId?: number | null;
 };
 
 function getShippingCents() {
@@ -82,7 +84,30 @@ export async function POST(request: Request) {
     return total + product.price_cents * item.qty;
   }, 0);
 
-  const shippingCents = getShippingCents();
+  const rawShippingOptionId = Number(payload?.shippingOptionId);
+  const shippingOptionId =
+    Number.isInteger(rawShippingOptionId) && rawShippingOptionId > 0
+      ? rawShippingOptionId
+      : null;
+  let shippingCents = getShippingCents();
+  try {
+    const selection = await resolveShippingSelection({
+      optionId: shippingOptionId,
+      subtotalCents,
+      defaultShippingCents: shippingCents,
+    });
+    shippingCents = selection.shippingCents;
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Option de livraison invalide.",
+      },
+      { status: 400 },
+    );
+  }
   const discountCode = getOptionalTrimmedString(payload?.discountCode);
   let discount: DiscountCode | null = null;
   let discountCents = 0;

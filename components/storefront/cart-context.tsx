@@ -41,10 +41,14 @@ type CartContextValue = {
   discount: CartDiscount | null;
   discountCents: number;
   estimatedTotalCents: number;
+  cartOpen: boolean;
   addItem: (item: AddCartItemInput) => void;
   incrementItem: (id: number, variantLabel?: string) => void;
   decrementItem: (id: number, variantLabel?: string) => void;
   removeItem: (id: number, variantLabel?: string) => void;
+  setCartOpen: (open: boolean) => void;
+  openCart: () => void;
+  closeCart: () => void;
   setDiscount: (discount: CartDiscount | null) => void;
   clear: () => void;
 };
@@ -97,6 +101,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
   const [discount, setDiscount] = useState<CartDiscount | null>(null);
   const [hydrated, setHydrated] = useState(false);
+  const [cartOpen, setCartOpen] = useState(false);
 
   useEffect(() => {
     try {
@@ -129,6 +134,14 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       // Ignore localStorage errors.
     }
   }, [discount, hydrated, items]);
+
+  const openCart = useCallback(() => {
+    setCartOpen(true);
+  }, [setCartOpen]);
+
+  const closeCart = useCallback(() => {
+    setCartOpen(false);
+  }, [setCartOpen]);
 
   const addItem = useCallback((item: AddCartItemInput) => {
     setItems((prev) => {
@@ -218,23 +231,31 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       discount,
       discountCents,
       estimatedTotalCents,
+      cartOpen,
       addItem,
       incrementItem,
       decrementItem,
       removeItem,
+      setCartOpen,
+      openCart,
+      closeCart,
       setDiscount,
       clear,
     }),
     [
       addItem,
+      cartOpen,
       clear,
+      closeCart,
       decrementItem,
       discount,
       discountCents,
       estimatedTotalCents,
       incrementItem,
       items,
+      openCart,
       removeItem,
+      setCartOpen,
       setDiscount,
       totalCents,
     ],

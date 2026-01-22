@@ -9,6 +9,7 @@ import {
   Settings,
   ShoppingBag,
   Tag,
+  Users,
 } from "lucide-react";
 
 import AdminSignOutButton from "@/app/admin/components/AdminSignOutButton";
@@ -43,6 +44,7 @@ type NavItem = {
   key:
     | "dashboard"
     | "orders"
+    | "customers"
     | "products"
     | "discounts"
     | "analytics"
@@ -59,6 +61,7 @@ type AdminShellProps = {
   current:
     | "dashboard"
     | "orders"
+    | "customers"
     | "products"
     | "collections"
     | "discounts"
@@ -80,6 +83,12 @@ const NAV_ITEMS: NavItem[] = [
     label: "Orders",
     href: "/admin/orders",
     icon: ShoppingBag,
+  },
+  {
+    key: "customers",
+    label: "Customers",
+    href: "/admin/customers",
+    icon: Users,
   },
   {
     key: "products",

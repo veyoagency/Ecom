@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 
+import { upsertCustomer } from "@/lib/customers";
 import { sendEmail } from "@/lib/email";
 import { generatePublicId } from "@/lib/ids";
 import { DiscountCode, Order, OrderItem, Product, sequelize } from "@/lib/models";
+import { resolveShippingSelection } from "@/lib/shipping-options";
 import { getPayPalAccessToken, getPayPalBaseUrl } from "@/lib/paypal";
 import { getOptionalTrimmedString } from "@/lib/validators";
 
@@ -19,6 +21,7 @@ type CapturePayload = {
   orderId: string;
   items: CartItemInput[];
   discountCode?: string | null;
+  shippingOptionId?: number | null;
 };
 
 type PayPalCaptureResponse = {
@@ -182,7 +185,35 @@ export async function POST(request: Request) {
     return total + product.price_cents * item.qty;
   }, 0);
 
-  const shippingCents = getShippingCents();
+  const rawShippingOptionId = Number(payload?.shippingOptionId);
+  const shippingOptionId =
+    Number.isInteger(rawShippingOptionId) && rawShippingOptionId > 0
+      ? rawShippingOptionId
+      : null;
+  const defaultShippingCents = getShippingCents();
+  let shippingCents = defaultShippingCents;
+  let shippingOption: Awaited<
+    ReturnType<typeof resolveShippingSelection>
+  >["option"] = null;
+  try {
+    const selection = await resolveShippingSelection({
+      optionId: shippingOptionId,
+      subtotalCents,
+      defaultShippingCents,
+    });
+    shippingCents = selection.shippingCents;
+    shippingOption = selection.option;
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Option de livraison invalide.",
+      },
+      { status: 400 },
+    );
+  }
   const discountCode = getOptionalTrimmedString(payload?.discountCode);
   let discount: DiscountCode | null = null;
   let discountCents = 0;
@@ -273,24 +304,37 @@ export async function POST(request: Request) {
   const order = await sequelize.transaction(async (transaction) => {
     const publicId = generatePublicId();
 
+    const customer = await upsertCustomer(
+      {
+        email,
+        firstName,
+        lastName,
+        phone,
+        address1,
+        address2,
+        postalCode,
+        city,
+        country,
+      },
+      { transaction },
+    );
+
     const insertedOrder = await Order.create(
       {
         public_id: publicId,
         status: "paid",
+        payment_status: "paid",
+        refunded_cents: 0,
+        customer_id: customer.id,
         paypal_order_id: orderId,
         paypal_capture_id: captureId,
-        first_name: firstName,
-        last_name: lastName,
-        email,
-        phone,
-        address1,
-        address2,
-        postal_code: postalCode,
-        city,
-        country,
         preferred_payment_method: "PayPal",
         subtotal_cents: subtotalCents,
         shipping_cents: shippingCents,
+        shipping_carrier_id: shippingOption?.id ?? null,
+        shipping_option_title: shippingOption?.title ?? null,
+        shipping_option_carrier: shippingOption?.carrier ?? null,
+        shipping_option_type: shippingOption?.shipping_type ?? null,
         discount_code_id: discount ? discount.id : null,
         discount_cents: discountCents || null,
         total_cents: totalCents,

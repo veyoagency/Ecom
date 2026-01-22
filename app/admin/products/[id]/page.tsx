@@ -99,7 +99,7 @@ export default async function AdminEditProductPage({
             {
               model: ProductOptionValue,
               as: "values",
-              attributes: ["id", "value", "position"],
+              attributes: ["id", "value", "position", "image_url"],
               required: false,
             },
           ],
@@ -123,6 +123,7 @@ export default async function AdminEditProductPage({
     description_html: string | null;
     price_cents: number;
     compare_at_cents: number | null;
+    weight_kg?: string | null;
     active: boolean;
     in_stock?: boolean;
     images?: Array<{ url: string; position: number | null }>;
@@ -130,7 +131,11 @@ export default async function AdminEditProductPage({
     options?: Array<{
       name: string;
       position: number | null;
-      values?: Array<{ value: string; position: number | null }>;
+      values?: Array<{
+        value: string;
+        position: number | null;
+        image_url?: string | null;
+      }>;
     }>;
   };
 
@@ -151,7 +156,10 @@ export default async function AdminEditProductPage({
       values: (option.values ?? [])
         .slice()
         .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
-        .map((value) => value.value),
+        .map((value) => ({
+          value: value.value,
+          imageUrl: value.image_url ?? null,
+        })),
     }))
     .filter((option) => option.name && option.values.length > 0);
 
@@ -169,6 +177,7 @@ export default async function AdminEditProductPage({
         descriptionHtml: productJson.description_html ?? "",
         priceCents: productJson.price_cents,
         compareAtCents: productJson.compare_at_cents,
+        weightKg: productJson.weight_kg ?? null,
         active: productJson.active,
         inStock: productJson.in_stock ?? true,
         collectionIds: (productJson.collections ?? []).map((collection) =>

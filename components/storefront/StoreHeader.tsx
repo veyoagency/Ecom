@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { AnimatePresence, motion, useScroll } from "framer-motion";
 import { Menu, Minus, Plus, ShoppingBag, Tag, Trash2, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -193,15 +194,21 @@ export default function StoreHeader({
   transparent = false,
   fontClassName = "",
   logoUrl = null,
+  logoTransparentUrl = null,
+  logoVariant = "default",
   storeName = "New Commerce",
   paypalClientId,
 }: {
   transparent?: boolean;
   fontClassName?: string;
   logoUrl?: string | null;
+  logoTransparentUrl?: string | null;
+  logoVariant?: "default" | "transparent";
   storeName?: string;
   paypalClientId?: string;
 }) {
+  const { scrollY } = useScroll();
+  const [showFloatingHeader, setShowFloatingHeader] = useState(false);
   const {
     items,
     totalCents,
@@ -213,14 +220,22 @@ export default function StoreHeader({
     estimatedTotalCents,
     setDiscount,
     clear,
+    cartOpen,
+    setCartOpen,
   } = useCart();
   const hasItems = items.length > 0;
   const totalQuantity = items.reduce((sum, item) => sum + item.quantity, 0);
-  const iconClassName = transparent ? "text-white" : "text-neutral-900";
   const sheetClassName = `${fontClassName} bg-white`.trim();
   const [discountInput, setDiscountInput] = useState("");
   const [discountError, setDiscountError] = useState<string | null>(null);
   const [discountLoading, setDiscountLoading] = useState(false);
+
+  useEffect(() => {
+    const unsubscribe = scrollY.onChange((latest) => {
+      setShowFloatingHeader(latest > 160);
+    });
+    return () => unsubscribe();
+  }, [scrollY]);
 
   const handleApplyDiscount = async () => {
     const code = discountInput.trim().toUpperCase();
@@ -265,294 +280,383 @@ export default function StoreHeader({
     }
   };
 
-  return (
-    <header
-      className={
-        transparent
-          ? "absolute inset-x-0 top-0 z-20 bg-transparent text-white"
-          : "bg-white"
-      }
-    >
-      <div className="mx-auto flex h-16 max-w-6xl items-center px-4 sm:px-6">
-        <div className="grid w-full grid-cols-3 items-center">
-          <div className="flex h-full items-center justify-start">
-            <Sheet>
-              <SheetTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label="Open menu"
-                  className="cursor-pointer hover:bg-transparent"
-                >
-                  <Menu className={`h-5 w-5 ${iconClassName}`} />
-                </Button>
-              </SheetTrigger>
-              <SheetContent side="left" className={sheetClassName}>
-                <SheetHeader>
-                  <SheetTitle>Menu</SheetTitle>
-                  <SheetDescription>
-                    Browse the storefront sections.
-                  </SheetDescription>
-                </SheetHeader>
-                <nav className="mt-4 flex flex-col gap-2 px-4">
-                  <Link
-                    href="/"
-                    className="rounded-md px-3 py-2 text-base font-normal text-neutral-700 hover:bg-neutral-100"
+  const renderHeader = (variant: "base" | "floating") => {
+    const isFloating = variant === "floating";
+    const prefersTransparentLogo = transparent || logoVariant === "transparent";
+    const baseLogoUrl =
+      prefersTransparentLogo && logoTransparentUrl ? logoTransparentUrl : logoUrl;
+    const displayLogoUrl = isFloating ? logoUrl : baseLogoUrl;
+    const iconClassName = isFloating
+      ? "text-neutral-900"
+      : transparent
+        ? "text-white"
+        : "text-neutral-900";
+    const headerClassName = isFloating
+      ? "bg-white/95 shadow-md backdrop-blur"
+      : transparent
+        ? "absolute inset-x-0 top-0 z-20 bg-transparent text-white"
+        : "bg-white";
+    const iconWrapperClassName = isFloating
+      ? "bg-white"
+      : transparent
+        ? "bg-white/10"
+        : "bg-white";
+    const logoClassName = isFloating
+      ? "text-neutral-900"
+      : transparent
+        ? "text-white"
+        : "text-neutral-900";
+
+    return (
+      <header className={headerClassName}>
+        <div className="mx-auto flex h-16 max-w-6xl items-center px-4 sm:px-6">
+          <div className="grid w-full grid-cols-3 items-center">
+            <div className="flex h-full items-center justify-start">
+              <Sheet>
+                <SheetTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Open menu"
+                    className="cursor-pointer hover:bg-transparent"
                   >
-                    Home
-                  </Link>
-                  <Link
-                    href="/produits"
-                    className="rounded-md px-3 py-2 text-base font-normal text-neutral-700 hover:bg-neutral-100"
-                  >
-                    Produits
-                  </Link>
-                  <Link
-                    href="/panier"
-                    className="rounded-md px-3 py-2 text-base font-normal text-neutral-700 hover:bg-neutral-100"
-                  >
-                    Panier
-                  </Link>
-                </nav>
-              </SheetContent>
-            </Sheet>
-          </div>
-          <div className="flex h-full items-center justify-center">
-            <Link
-              href="/"
-              className={`text-base font-normal uppercase leading-none ${
-                transparent ? "text-white" : "text-neutral-900"
-              }`}
-            >
-              {logoUrl ? (
-                <img
-                  src={logoUrl}
-                  alt={storeName}
-                  className="h-10 w-auto object-contain"
-                />
-              ) : (
-                storeName
-              )}
-            </Link>
-          </div>
-          <div className="flex h-full items-center justify-end">
-            <Sheet>
-              <SheetTrigger asChild>
+                    <Menu className={`h-5 w-5 ${iconClassName}`} />
+                  </Button>
+                </SheetTrigger>
+                <SheetContent side="left" className={sheetClassName}>
+                  <SheetHeader>
+                    <SheetTitle>Menu</SheetTitle>
+                    <SheetDescription>
+                      Browse the storefront sections.
+                    </SheetDescription>
+                  </SheetHeader>
+                  <nav className="mt-4 flex flex-col gap-2 px-4">
+                    <Link
+                      href="/"
+                      className="rounded-md px-3 py-2 text-base font-normal text-neutral-700 hover:bg-neutral-100"
+                    >
+                      Home
+                    </Link>
+                    <Link
+                      href="/produits"
+                      className="rounded-md px-3 py-2 text-base font-normal text-neutral-700 hover:bg-neutral-100"
+                    >
+                      Produits
+                    </Link>
+                    <Link
+                      href="/panier"
+                      className="rounded-md px-3 py-2 text-base font-normal text-neutral-700 hover:bg-neutral-100"
+                    >
+                      Panier
+                    </Link>
+                  </nav>
+                </SheetContent>
+              </Sheet>
+            </div>
+            <div className="flex h-full items-center justify-center">
+              <Link
+                href="/"
+                className={`text-base font-normal uppercase leading-none ${logoClassName}`}
+              >
+                {displayLogoUrl ? (
+                  <img
+                    src={displayLogoUrl}
+                    alt={storeName}
+                    className="h-10 w-auto object-contain"
+                  />
+                ) : (
+                  storeName
+                )}
+              </Link>
+            </div>
+            <div className="flex h-full items-center justify-end">
+              {isFloating ? (
                 <Button
                   variant="ghost"
                   size="icon"
                   aria-label="Open cart"
-                  className="cursor-pointer hover:bg-transparent"
+                  className="relative cursor-pointer hover:bg-transparent"
+                  onClick={() => setCartOpen(true)}
                 >
-                  <ShoppingBag className={`h-5 w-5 ${iconClassName}`} />
-                </Button>
-              </SheetTrigger>
-              <SheetContent side="right" className={sheetClassName}>
-                <SheetHeader className="flex flex-row items-center gap-2 px-4 pb-2 pt-4">
-                  <SheetTitle className="text-base font-normal text-neutral-900">
-                    Panier
-                  </SheetTitle>
-                  <span className="rounded-full border border-neutral-300 px-2 py-0.5 text-xs text-neutral-600">
-                    {totalQuantity}
+                  <span
+                    className={`cart-icon-round flex h-10 w-10 items-center justify-center rounded-full border ${iconWrapperClassName}`}
+                  >
+                    <ShoppingBag className={`h-5 w-5 ${iconClassName}`} />
                   </span>
-                </SheetHeader>
-                <div className="flex flex-1 flex-col gap-6 px-4 pb-6">
-                  {hasItems ? (
-                    <div className="flex flex-col gap-6">
-                      {items.map((item) => {
-                        const key = `${item.id}-${item.variantLabel ?? "default"}`;
-                        const lineTotal = item.priceCents * item.quantity;
-                        return (
-                          <div key={key} className="space-y-3">
-                            <div className="flex items-start gap-3">
-                              <div className="h-16 w-16 overflow-hidden bg-neutral-100">
-                                {item.imageUrl ? (
-                                  <img
-                                    src={item.imageUrl}
-                                    alt={item.title}
-                                    className="h-full w-full object-cover"
-                                  />
-                                ) : null}
-                              </div>
-                              <div className="flex flex-1 flex-col gap-1">
-                                <div className="flex items-center justify-between gap-2">
-                                  <span className="text-sm text-neutral-900">
-                                    {item.title}
-                                  </span>
-                                  <span className="text-sm text-neutral-900">
-                                    {formatPrice(lineTotal)}
+                  <AnimatePresence>
+                    {totalQuantity > 0 ? (
+                      <motion.span
+                        key={totalQuantity}
+                        initial={{ opacity: 0, scale: 0.6, y: -4 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.6, y: -4 }}
+                        transition={{ type: "spring", stiffness: 420, damping: 22 }}
+                        className="cart-badge-round absolute -right-1 -top-1 flex min-h-[22px] min-w-[22px] items-center justify-center rounded-full bg-black px-1 text-[11px] font-semibold text-white"
+                      >
+                        {totalQuantity}
+                      </motion.span>
+                    ) : null}
+                  </AnimatePresence>
+                </Button>
+              ) : (
+                <Sheet open={cartOpen} onOpenChange={setCartOpen}>
+                  <SheetTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label="Open cart"
+                      className="relative cursor-pointer hover:bg-transparent"
+                    >
+                      <span
+                        className={`cart-icon-round flex h-10 w-10 items-center justify-center rounded-full border ${iconWrapperClassName}`}
+                      >
+                        <ShoppingBag className={`h-5 w-5 ${iconClassName}`} />
+                      </span>
+                      <AnimatePresence>
+                        {totalQuantity > 0 ? (
+                          <motion.span
+                            key={totalQuantity}
+                            initial={{ opacity: 0, scale: 0.6, y: -4 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.6, y: -4 }}
+                            transition={{ type: "spring", stiffness: 420, damping: 22 }}
+                            className="cart-badge-round absolute -right-1 -top-1 flex min-h-[22px] min-w-[22px] items-center justify-center rounded-full bg-black px-1 text-[11px] font-semibold text-white"
+                          >
+                            {totalQuantity}
+                          </motion.span>
+                        ) : null}
+                      </AnimatePresence>
+                    </Button>
+                  </SheetTrigger>
+                  <SheetContent side="right" className={sheetClassName}>
+                  <SheetHeader className="flex flex-row items-center gap-2 px-4 pb-2 pt-4">
+                    <SheetTitle className="text-base font-normal text-neutral-900">
+                      Panier
+                    </SheetTitle>
+                    <span className="rounded-full border border-neutral-300 px-2 py-0.5 text-xs text-neutral-600">
+                      {totalQuantity}
+                    </span>
+                  </SheetHeader>
+                  <div className="flex flex-1 flex-col gap-6 px-4 pb-6">
+                    {hasItems ? (
+                      <div className="flex flex-col gap-6">
+                        {items.map((item) => {
+                          const key = `${item.id}-${item.variantLabel ?? "default"}`;
+                          const lineTotal = item.priceCents * item.quantity;
+                          return (
+                            <div key={key} className="space-y-3">
+                              <div className="flex items-start gap-3">
+                                <div className="h-16 w-16 overflow-hidden bg-neutral-100">
+                                  {item.imageUrl ? (
+                                    <img
+                                      src={item.imageUrl}
+                                      alt={item.title}
+                                      className="h-full w-full object-cover"
+                                    />
+                                  ) : null}
+                                </div>
+                                <div className="flex flex-1 flex-col gap-1">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="text-sm text-neutral-900">
+                                      {item.title}
+                                    </span>
+                                    <span className="text-sm text-neutral-900">
+                                      {formatPrice(lineTotal)}
+                                    </span>
+                                  </div>
+                                  {item.variantLabel ? (
+                                    <span className="text-xs text-neutral-500">
+                                      {item.variantLabel}
+                                    </span>
+                                  ) : null}
+                                  <span className="text-xs text-neutral-500">
+                                    {formatPrice(item.priceCents)}
                                   </span>
                                 </div>
-                                {item.variantLabel ? (
-                                  <span className="text-xs text-neutral-500">
-                                    {item.variantLabel}
-                                  </span>
-                                ) : null}
-                                <span className="text-xs text-neutral-500">
-                                  {formatPrice(item.priceCents)}
-                                </span>
                               </div>
-                            </div>
-                            <div className="flex items-center gap-3">
-                              <div className="flex items-center border border-neutral-300">
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    decrementItem(item.id, item.variantLabel)
-                                  }
-                                  className="px-3 py-2 text-neutral-700"
-                                  aria-label="Decrease quantity"
-                                >
-                                  <Minus className="h-4 w-4" />
-                                </button>
-                                <span className="min-w-[36px] text-center text-sm text-neutral-900">
-                                  {item.quantity}
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    incrementItem(item.id, item.variantLabel)
-                                  }
-                                  className="px-3 py-2 text-neutral-700"
-                                  aria-label="Increase quantity"
-                                >
-                                  <Plus className="h-4 w-4" />
-                                </button>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  removeItem(item.id, item.variantLabel)
-                                }
-                                className="text-neutral-500"
-                                aria-label="Remove item"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <div className="rounded-lg border border-dashed border-neutral-200 p-6 text-center text-sm text-neutral-500">
-                      Your cart is empty.
-                    </div>
-                  )}
-                  {hasItems ? (
-                    <div className="mt-auto flex flex-col gap-4 border-t border-neutral-200 pt-4">
-                      {discount && discountCents > 0 ? (
-                        <div className="space-y-2 border-b border-neutral-200 pb-4 text-sm text-neutral-700">
-                          <div className="flex items-center justify-between">
-                            <span>Sous-total</span>
-                            <span className="text-neutral-900">
-                              {formatPrice(totalCents)}
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between text-neutral-600">
-                            <div className="flex items-center gap-2">
-                              <Tag className="h-3.5 w-3.5" />
-                              <span className="uppercase">{discount.code}</span>
-                            </div>
-                            <span className="text-neutral-900">
-                              -{formatPrice(discountCents)}
-                            </span>
-                          </div>
-                        </div>
-                      ) : null}
-                      <Accordion
-                        type="single"
-                        collapsible
-                        className="border-b border-neutral-200"
-                      >
-                        <AccordionItem
-                          value="reduction"
-                          className="border-neutral-200"
-                        >
-                          <AccordionTrigger className="group py-3 text-sm font-normal text-neutral-700 hover:no-underline [&>svg]:hidden">
-                            <span className="flex w-full items-center justify-between">
-                              <span>Reduction</span>
-                              <span className="flex items-center">
-                                <Plus className="h-4 w-4 text-neutral-500 group-data-[state=open]:hidden" />
-                                <Minus className="hidden h-4 w-4 text-neutral-500 group-data-[state=open]:inline" />
-                              </span>
-                            </span>
-                          </AccordionTrigger>
-                          <AccordionContent className="pb-4">
-                            <div className="flex gap-2">
-                              <input
-                                type="text"
-                                value={discountInput}
-                                onChange={(event) => {
-                                  setDiscountInput(event.target.value);
-                                  if (discountError) {
-                                    setDiscountError(null);
-                                  }
-                                }}
-                                placeholder="Code de reduction"
-                                className="h-10 flex-1 border border-neutral-300 px-3 text-sm"
-                              />
-                              <Button
-                                className="h-10 rounded-none bg-black text-white hover:bg-black/90"
-                                onClick={handleApplyDiscount}
-                                disabled={discountLoading || !discountInput.trim()}
-                              >
-                                Appliquer
-                              </Button>
-                            </div>
-                            {discountError ? (
-                              <p className="mt-2 text-xs text-red-600">
-                                {discountError}
-                              </p>
-                            ) : null}
-                            {discount ? (
-                              <div className="mt-3 flex items-center gap-2">
-                                <span className="inline-flex items-center gap-1 rounded-full border border-neutral-200 px-2 py-1 text-xs uppercase text-neutral-700">
-                                  {discount.code}
+                              <div className="flex items-center gap-3">
+                                <div className="flex items-center border border-neutral-300">
                                   <button
                                     type="button"
-                                    onClick={() => setDiscount(null)}
-                                    className="text-neutral-500"
-                                    aria-label="Remove discount"
+                                    onClick={() =>
+                                      decrementItem(item.id, item.variantLabel)
+                                    }
+                                    className="px-3 py-2 text-neutral-700"
+                                    aria-label="Decrease quantity"
                                   >
-                                    <X className="h-3 w-3" />
+                                    <Minus className="h-4 w-4" />
                                   </button>
-                                </span>
+                                  <span className="min-w-[36px] text-center text-sm text-neutral-900">
+                                    {item.quantity}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      incrementItem(item.id, item.variantLabel)
+                                    }
+                                    className="px-3 py-2 text-neutral-700"
+                                    aria-label="Increase quantity"
+                                  >
+                                    <Plus className="h-4 w-4" />
+                                  </button>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    removeItem(item.id, item.variantLabel)
+                                  }
+                                  className="text-neutral-500"
+                                  aria-label="Remove item"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
                               </div>
-                            ) : null}
-                          </AccordionContent>
-                        </AccordionItem>
-                      </Accordion>
-                      <div className="flex items-center justify-between text-sm text-neutral-700">
-                        <span>Total estime</span>
-                        <span className="text-neutral-900">
-                          {formatPrice(estimatedTotalCents)}
-                        </span>
+                            </div>
+                          );
+                        })}
                       </div>
-                      <Button
-                        asChild
-                        className="py-6 rounded-none bg-black text-white hover:bg-black/90"
-                      >
-                        <Link href="/checkout">Payer</Link>
-                      </Button>
-                      <PayPalCheckoutButton
-                        clientId={paypalClientId}
-                        amountCents={estimatedTotalCents}
-                        items={items.map((item) => ({
-                          id: item.id,
-                          quantity: item.quantity,
-                        }))}
-                        discountCode={discount?.code ?? null}
-                        onPaid={clear}
-                      />
-                    </div>
-                  ) : null}
-                </div>
-              </SheetContent>
-            </Sheet>
+                    ) : (
+                      <div className="rounded-lg border border-dashed border-neutral-200 p-6 text-center text-sm text-neutral-500">
+                        Votre panier est vide.
+                      </div>
+                    )}
+                    {hasItems ? (
+                      <div className="mt-auto flex flex-col gap-4 border-t border-neutral-200 pt-4">
+                        {discount && discountCents > 0 ? (
+                          <div className="space-y-2 border-b border-neutral-200 pb-4 text-sm text-neutral-700">
+                            <div className="flex items-center justify-between">
+                              <span>Sous-total</span>
+                              <span className="text-neutral-900">
+                                {formatPrice(totalCents)}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between text-neutral-600">
+                              <div className="flex items-center gap-2">
+                                <Tag className="h-3.5 w-3.5" />
+                                <span className="uppercase">{discount.code}</span>
+                              </div>
+                              <span className="text-neutral-900">
+                                -{formatPrice(discountCents)}
+                              </span>
+                            </div>
+                          </div>
+                        ) : null}
+                        <Accordion
+                          type="single"
+                          collapsible
+                          className="border-b border-neutral-200"
+                        >
+                          <AccordionItem
+                            value="reduction"
+                            className="border-neutral-200"
+                          >
+                            <AccordionTrigger className="group py-3 text-sm font-normal text-neutral-700 hover:no-underline [&>svg]:hidden">
+                              <span className="flex w-full items-center justify-between">
+                                <span>Reduction</span>
+                                <span className="flex items-center">
+                                  <Plus className="h-4 w-4 text-neutral-500 group-data-[state=open]:hidden" />
+                                  <Minus className="hidden h-4 w-4 text-neutral-500 group-data-[state=open]:inline" />
+                                </span>
+                              </span>
+                            </AccordionTrigger>
+                            <AccordionContent className="pb-4">
+                              <div className="flex gap-2">
+                                <input
+                                  type="text"
+                                  value={discountInput}
+                                  onChange={(event) => {
+                                    setDiscountInput(event.target.value);
+                                    if (discountError) {
+                                      setDiscountError(null);
+                                    }
+                                  }}
+                                  placeholder="Code de reduction"
+                                  className="h-10 flex-1 border border-neutral-300 px-3 text-sm"
+                                />
+                                <Button
+                                  className="h-10 rounded-none bg-black text-white hover:bg-black/90"
+                                  onClick={handleApplyDiscount}
+                                  disabled={
+                                    discountLoading || !discountInput.trim()
+                                  }
+                                >
+                                  Appliquer
+                                </Button>
+                              </div>
+                              {discountError ? (
+                                <p className="mt-2 text-xs text-red-600">
+                                  {discountError}
+                                </p>
+                              ) : null}
+                              {discount ? (
+                                <div className="mt-3 flex items-center gap-2">
+                                  <span className="inline-flex items-center gap-1 rounded-full border border-neutral-200 px-2 py-1 text-xs uppercase text-neutral-700">
+                                    {discount.code}
+                                    <button
+                                      type="button"
+                                      onClick={() => setDiscount(null)}
+                                      className="text-neutral-500"
+                                      aria-label="Remove discount"
+                                    >
+                                      <X className="h-3 w-3" />
+                                    </button>
+                                  </span>
+                                </div>
+                              ) : null}
+                            </AccordionContent>
+                          </AccordionItem>
+                        </Accordion>
+                        <div className="flex items-center justify-between text-sm text-neutral-700">
+                          <span>Total estime</span>
+                          <span className="text-neutral-900">
+                            {formatPrice(estimatedTotalCents)}
+                          </span>
+                        </div>
+                        <Button
+                          asChild
+                          className="py-6 rounded-none bg-black text-white hover:bg-black/90"
+                        >
+                          <Link href="/checkout">Payer</Link>
+                        </Button>
+                        <PayPalCheckoutButton
+                          clientId={paypalClientId}
+                          amountCents={estimatedTotalCents}
+                          items={items.map((item) => ({
+                            id: item.id,
+                            quantity: item.quantity,
+                          }))}
+                          discountCode={discount?.code ?? null}
+                          onPaid={clear}
+                        />
+                      </div>
+                    ) : null}
+                  </div>
+                  </SheetContent>
+                </Sheet>
+              )}
+            </div>
           </div>
         </div>
-      </div>
-    </header>
+      </header>
+    );
+  };
+
+  return (
+    <>
+      {renderHeader("base")}
+      <AnimatePresence>
+        {showFloatingHeader ? (
+          <motion.div
+            className="fixed inset-x-0 top-0 z-40"
+            initial={{ opacity: 0, y: -16 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -16 }}
+            transition={{ duration: 0.25, ease: "easeOut" }}
+          >
+            {renderHeader("floating")}
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+    </>
   );
 }

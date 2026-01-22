@@ -27,6 +27,7 @@ export async function GET(request: NextRequest) {
   delete data.paypal_client_secret_encrypted;
   delete data.sendcloud_public_key_encrypted;
   delete data.sendcloud_private_key_encrypted;
+  delete data.google_maps_api_key_encrypted;
 
   return NextResponse.json({ settings: data });
 }
@@ -50,6 +51,12 @@ export async function PUT(request: NextRequest) {
   const paypalClientSecret = body?.paypalClientSecret?.toString().trim() ?? "";
   const sendcloudPublicKey = body?.sendcloudPublicKey?.toString().trim() ?? "";
   const sendcloudPrivateKey = body?.sendcloudPrivateKey?.toString().trim() ?? "";
+  const googleMapsApiKey = body?.googleMapsApiKey?.toString().trim() ?? "";
+  const googleMapsCountryCodes = Array.isArray(body?.googleMapsCountryCodes)
+    ? body.googleMapsCountryCodes
+        .map((code: unknown) => code?.toString().trim().toUpperCase())
+        .filter((code: string) => code && code.length === 2)
+    : null;
 
   if (!storeName) {
     return NextResponse.json(
@@ -108,15 +115,30 @@ export async function PUT(request: NextRequest) {
       settingsPayload.sendcloud_public_key_encrypted = encryptSecret(
         sendcloudPublicKey,
       );
-      settingsPayload.sendcloud_public_key_hint = sendcloudPublicKey.slice(0, 10);
+      settingsPayload.sendcloud_public_key_hint = sendcloudPublicKey.slice(-4);
     }
 
     if (sendcloudPrivateKey) {
       settingsPayload.sendcloud_private_key_encrypted = encryptSecret(
         sendcloudPrivateKey,
       );
-      settingsPayload.sendcloud_private_key_hint = sendcloudPrivateKey.slice(0, 10);
+      settingsPayload.sendcloud_private_key_hint = sendcloudPrivateKey.slice(-4);
     }
+
+    if (googleMapsApiKey) {
+      settingsPayload.google_maps_api_key_encrypted = encryptSecret(
+        googleMapsApiKey,
+      );
+      settingsPayload.google_maps_api_key_hint = googleMapsApiKey.slice(-4);
+    }
+
+    if (googleMapsCountryCodes) {
+      const uniqueCodes = Array.from(new Set(googleMapsCountryCodes));
+      settingsPayload.google_maps_country_codes = uniqueCodes.length
+        ? JSON.stringify(uniqueCodes)
+        : null;
+    }
+
   } catch (error) {
     return NextResponse.json(
       {
@@ -153,6 +175,7 @@ export async function PUT(request: NextRequest) {
     delete data.paypal_client_secret_encrypted;
     delete data.sendcloud_public_key_encrypted;
     delete data.sendcloud_private_key_encrypted;
+    delete data.google_maps_api_key_encrypted;
 
     return NextResponse.json({ settings: data }, { status: 200 });
   } catch {

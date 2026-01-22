@@ -30,6 +30,7 @@ export class Product extends Model {
   declare description_html: string | null;
   declare price_cents: number;
   declare compare_at_cents: number | null;
+  declare weight_kg: string | null;
   declare active: boolean;
   declare in_stock: boolean;
   declare created_at: Date;
@@ -62,6 +63,10 @@ Product.init(
     },
     compare_at_cents: {
       type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    weight_kg: {
+      type: DataTypes.DECIMAL(10, 3),
       allowNull: true,
     },
     active: {
@@ -176,6 +181,7 @@ export class ProductOptionValue extends Model {
   declare id: number;
   declare option_id: number;
   declare value: string;
+  declare image_url: string | null;
   declare position: number;
   declare created_at: Date;
 }
@@ -194,6 +200,10 @@ ProductOptionValue.init(
     value: {
       type: DataTypes.TEXT,
       allowNull: false,
+    },
+    image_url: {
+      type: DataTypes.TEXT,
+      allowNull: true,
     },
     position: {
       type: DataTypes.INTEGER,
@@ -236,6 +246,9 @@ export class WebsiteSetting extends Model {
   declare sendcloud_public_key_hint: string | null;
   declare sendcloud_private_key_encrypted: string | null;
   declare sendcloud_private_key_hint: string | null;
+  declare google_maps_api_key_encrypted: string | null;
+  declare google_maps_api_key_hint: string | null;
+  declare google_maps_country_codes: string | null;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -333,6 +346,18 @@ WebsiteSetting.init(
       type: DataTypes.TEXT,
       allowNull: true,
     },
+    google_maps_api_key_encrypted: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    google_maps_api_key_hint: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    google_maps_country_codes: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
     created_at: {
       type: DataTypes.DATE,
     },
@@ -343,6 +368,77 @@ WebsiteSetting.init(
   {
     sequelize,
     tableName: "website_settings",
+    timestamps: true,
+    createdAt: "created_at",
+    updatedAt: "updated_at",
+  },
+);
+
+export class ShippingOption extends Model {
+  declare id: number;
+  declare carrier: string;
+  declare shipping_type: string;
+  declare title: string;
+  declare description: string | null;
+  declare price: string;
+  declare min_order_total: string | null;
+  declare max_order_total: string | null;
+  declare position: number;
+  declare created_at: Date;
+  declare updated_at: Date;
+}
+
+ShippingOption.init(
+  {
+    id: {
+      type: DataTypes.BIGINT,
+      autoIncrement: true,
+      primaryKey: true,
+    },
+    carrier: {
+      type: DataTypes.TEXT,
+      allowNull: false,
+    },
+    shipping_type: {
+      type: DataTypes.TEXT,
+      allowNull: false,
+      defaultValue: "shipping",
+    },
+    title: {
+      type: DataTypes.TEXT,
+      allowNull: false,
+    },
+    description: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    price: {
+      type: DataTypes.DECIMAL(10, 2),
+      allowNull: false,
+    },
+    min_order_total: {
+      type: DataTypes.DECIMAL(10, 2),
+      allowNull: true,
+    },
+    max_order_total: {
+      type: DataTypes.DECIMAL(10, 2),
+      allowNull: true,
+    },
+    position: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
+    },
+    created_at: {
+      type: DataTypes.DATE,
+    },
+    updated_at: {
+      type: DataTypes.DATE,
+    },
+  },
+  {
+    sequelize,
+    tableName: "shipping_options",
     timestamps: true,
     createdAt: "created_at",
     updatedAt: "updated_at",
@@ -497,11 +593,89 @@ DiscountCode.init(
   },
 );
 
+export class Customer extends Model {
+  declare id: number;
+  declare first_name: string | null;
+  declare last_name: string | null;
+  declare email: string;
+  declare phone: string | null;
+  declare address1: string | null;
+  declare address2: string | null;
+  declare postal_code: string | null;
+  declare city: string | null;
+  declare country: string | null;
+  declare created_at: Date;
+  declare updated_at: Date;
+}
+
+Customer.init(
+  {
+    id: {
+      type: DataTypes.BIGINT,
+      autoIncrement: true,
+      primaryKey: true,
+    },
+    first_name: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    last_name: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    email: {
+      type: DataTypes.TEXT,
+      allowNull: false,
+      unique: true,
+    },
+    phone: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    address1: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    address2: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    postal_code: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    city: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    country: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    created_at: {
+      type: DataTypes.DATE,
+    },
+    updated_at: {
+      type: DataTypes.DATE,
+    },
+  },
+  {
+    sequelize,
+    tableName: "customers",
+    timestamps: true,
+    createdAt: "created_at",
+    updatedAt: "updated_at",
+  },
+);
+
 export class Order extends Model {
   declare id: number;
   declare public_id: string;
   declare order_number: number | null;
   declare status: string;
+  declare customer_id: number | null;
+  declare payment_status: string | null;
+  declare refunded_cents: number | null;
   declare paypal_order_id: string | null;
   declare paypal_capture_id: string | null;
   declare stripe_payment_intent_id: string | null;
@@ -513,18 +687,27 @@ export class Order extends Model {
   declare stripe_seller_message: string | null;
   declare stripe_outcome_type: string | null;
   declare stripe_network_status: string | null;
-  declare first_name: string;
-  declare last_name: string;
-  declare email: string;
-  declare phone: string | null;
-  declare address1: string;
-  declare address2: string | null;
-  declare postal_code: string;
-  declare city: string;
-  declare country: string;
   declare preferred_payment_method: string;
   declare subtotal_cents: number;
   declare shipping_cents: number;
+  declare shipping_carrier_id: number | null;
+  declare shipping_option_title: string | null;
+  declare shipping_option_carrier: string | null;
+  declare shipping_option_type: string | null;
+  declare service_point_id: number | null;
+  declare service_point_name: string | null;
+  declare service_point_street: string | null;
+  declare service_point_house_number: string | null;
+  declare service_point_postal_code: string | null;
+  declare service_point_city: string | null;
+  declare service_point_distance: number | null;
+  declare sendcloud_shipment_id: string | null;
+  declare sendcloud_tracking_number: string | null;
+  declare sendcloud_tracking_url: string | null;
+  declare delivery_status: string | null;
+  declare shipping_label_reference: string | null;
+  declare shipping_label_url: string | null;
+  declare sendcloud_parcel_id: number | null;
   declare discount_code_id: number | null;
   declare discount_cents: number | null;
   declare total_cents: number;
@@ -549,6 +732,10 @@ Order.init(
       type: DataTypes.BIGINT,
       allowNull: false,
       defaultValue: Sequelize.literal("nextval('orders_order_number_seq')"),
+    },
+    customer_id: {
+      type: DataTypes.BIGINT,
+      allowNull: false,
     },
     paypal_order_id: {
       type: DataTypes.TEXT,
@@ -605,42 +792,13 @@ Order.init(
       allowNull: false,
       defaultValue: "pending_payment",
     },
-    first_name: {
-      type: DataTypes.TEXT,
-      allowNull: false,
-    },
-    last_name: {
-      type: DataTypes.TEXT,
-      allowNull: false,
-    },
-    email: {
-      type: DataTypes.TEXT,
-      allowNull: false,
-    },
-    phone: {
+    payment_status: {
       type: DataTypes.TEXT,
       allowNull: true,
     },
-    address1: {
-      type: DataTypes.TEXT,
-      allowNull: false,
-    },
-    address2: {
-      type: DataTypes.TEXT,
+    refunded_cents: {
+      type: DataTypes.INTEGER,
       allowNull: true,
-    },
-    postal_code: {
-      type: DataTypes.TEXT,
-      allowNull: false,
-    },
-    city: {
-      type: DataTypes.TEXT,
-      allowNull: false,
-    },
-    country: {
-      type: DataTypes.TEXT,
-      allowNull: false,
-      defaultValue: "FR",
     },
     preferred_payment_method: {
       type: DataTypes.TEXT,
@@ -653,6 +811,78 @@ Order.init(
     shipping_cents: {
       type: DataTypes.INTEGER,
       allowNull: false,
+    },
+    shipping_carrier_id: {
+      type: DataTypes.BIGINT,
+      allowNull: true,
+    },
+    shipping_option_title: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    shipping_option_carrier: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    shipping_option_type: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    service_point_id: {
+      type: DataTypes.BIGINT,
+      allowNull: true,
+    },
+    service_point_name: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    service_point_street: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    service_point_house_number: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    service_point_postal_code: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    service_point_city: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    service_point_distance: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    sendcloud_shipment_id: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    sendcloud_tracking_number: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    sendcloud_tracking_url: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    delivery_status: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    shipping_label_reference: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    shipping_label_url: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    sendcloud_parcel_id: {
+      type: DataTypes.BIGINT,
+      allowNull: true,
     },
     discount_code_id: {
       type: DataTypes.BIGINT,
@@ -837,6 +1067,15 @@ DiscountCode.hasMany(Order, {
 Order.belongsTo(DiscountCode, {
   foreignKey: "discount_code_id",
   as: "discount",
+});
+
+Customer.hasMany(Order, {
+  foreignKey: "customer_id",
+  as: "orders",
+});
+Order.belongsTo(Customer, {
+  foreignKey: "customer_id",
+  as: "customer",
 });
 
 Order.hasMany(OrderItem, { foreignKey: "order_id", as: "items" });
